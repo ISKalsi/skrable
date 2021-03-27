@@ -16,19 +16,44 @@ class Pen:
         self.mode = mode
 
 
-class DrawBoard(Client):
+class DrawBoard:
     def __init__(self, window: pygame.Surface, brushSizes, brushColors):
-        super().__init__()
         self.window = window
         self.brushSizes = brushSizes
         self.brushColors = brushColors
         self.pen = Pen(brushSizes[0], brushColors[0])
         self.last_position = None
-
-        self.__isTurn = True
+        self.isDrawing = False
 
         self.window.fill(Colors.WHITE)
-        
+
+    def draw(self, start, end):
+        s = [x - y for x, y in zip(start, Values.POINT_DB)]
+        e = [x - y for x, y in zip(end, Values.POINT_DB)]
+
+        pygame.draw.line(
+            surface=self.window,
+            color=self.pen.color,
+            start_pos=s,
+            end_pos=e,
+            width=self.pen.size
+        )
+
+    def setModeToInk(self):
+        self.pen.mode = Pen.INK
+
+    def setModeToEraser(self):
+        self.pen.mode = Pen.ERASE
+
+    def clearBoard(self):
+        self.window.fill(Colors.WHITE)
+
+
+class Game(Client):
+    def __init__(self, drawBoard):
+        super().__init__()
+
+        self.drawBoard = drawBoard
         self.__game = {
             "code": "",
             "type": "",
@@ -36,8 +61,9 @@ class DrawBoard(Client):
             "pendingGuesses": [],
             "isDrawing": False,
             "exitCode": self.SUCCESS
-        } 
+        }
 
+        self.__isTurn = True
         self.__guesses = []
 
     @property
@@ -69,39 +95,24 @@ class DrawBoard(Client):
     def playerType(self):
         return self.__game['type']
 
-    def draw(self, start, end):
-        s = [x - y for x, y in zip(start, Values.POINT_DB)]
-        e = [x - y for x, y in zip(end, Values.POINT_DB)]
-
-        pygame.draw.line(
-            surface=self.window,
-            color=self.pen.color,
-            start_pos=s,
-            end_pos=e,
-            width=self.pen.size
-        )
-
-        if self.isTurn:
-            self.__game["pendingCoordinates"].append(start)
-            if len(self.__game["pendingCoordinates"]) == 1:
-                self.__game["pendingCoordinates"].append(end)
-
-    def addGuess(self, guess):
-        self.__guesses.append(guess)
-        self.__game["pendingGuesses"].append(guess)
-
     @property
     def pendingCoordinates(self):
         return self.__game["pendingCoordinates"]
 
-    def clearPendingCoordinates(self):
-        self.__game["pendingCoordinates"].clear()
+    def addToPendingGuesses(self, guess):
+        self.__guesses.append(guess)
+        self.__game["pendingGuesses"].append(guess)
+
+    def addToPendingCoordinates(self, coordinate):
+        if not self.__game["pendingCoordinates"]:
+            self.__game["pendingCoordinates"].append(self.drawBoard.last_position)
+        self.__game["pendingCoordinates"].append(coordinate)
 
     def __sendDrawBoard(self):
         while True:
             with self.lock:
                 self._sendMsg(self.__game)
-                self.clearPendingCoordinates()
+                self.__game["pendingCoordinates"].clear()
 
                 newGuesses = self._receiveMsg()
 
@@ -126,9 +137,17 @@ class DrawBoard(Client):
 
                     isDrawing, pendingCoordinates = msg
                     self.__game["pendingCoordinates"].extend(pendingCoordinates)
-                    self.isDrawing = isDrawing
+                    self.drawBoard.isDrawing = self.isDrawing
 
             time.sleep(self.interval)
+
+    def run(self):
+        if self.isTurn:
+            self.__sendDrawBoard()
+        else:
+            self.__receiveDrawBoard()
+
+        print("Game InActive")
 
     def findGame(self, code, playerType):
         self._establishConnection()
@@ -146,23 +165,6 @@ class DrawBoard(Client):
 
         return False
 
-    def run(self):
-        if self.isTurn:
-            self.__sendDrawBoard()
-        else:
-            self.__receiveDrawBoard()
-
-        print("Game InActive")
-
-    def setModeToInk(self):
-        self.pen.mode = Pen.INK
-
-    def setModeToEraser(self):
-        self.pen.mode = Pen.ERASE
-
-    def clearBoard(self):
-        self.window.fill(Colors.WHITE)
-
     def __del__(self):
         msg = {
             "code": self.gameCode,
@@ -178,8 +180,7 @@ class DrawBoard(Client):
         super().__del__()
 
 
-class Player(Client):
+class Player:
     def __init__(self, name):
-        super(Player, self).__init__()
         self.name = name
         self.score = 0

@@ -1,10 +1,10 @@
 import pygame
 from threading import Lock
 from library.contants import Values, Colors
-from library.elements import DrawBoard, Player
-from library.ui import Menu
+from library.elements import DrawBoard, Game, Player
+from library.ui import StartGame
 
-menu = Menu()
+menu = StartGame()
 
 if menu.isQuit:
     exit(0)
@@ -21,6 +21,8 @@ drawBoard = DrawBoard(
     brushSizes=Values.SIZE_BRUSHES,
     brushColors=Colors.getAllColors()
 )
+
+game = Game(drawBoard)
 
 
 def update():
@@ -49,6 +51,8 @@ def drawLoop():
 
         if drawBoard.isDrawing and event.type == pygame.MOUSEMOTION:
             pos = pygame.mouse.get_pos()
+            game.addToPendingCoordinates(pos)
+
             drawBoard.draw(drawBoard.last_position, pos)
             drawBoard.last_position = pos
 
@@ -66,14 +70,14 @@ def guessLoop():
             pass
 
     with lock:
-        pc = drawBoard.pendingCoordinates
+        pc = game.pendingCoordinates
         if len(pc) > 1:
             for i in range(len(pc)-1):
                 drawBoard.draw(pc[0], pc[1])
                 pc.pop(0)
 
         if pc and not drawBoard.isDrawing:
-            drawBoard.clearPendingCoordinates()
+            pc.clear()
 
 
 def run(loop):
@@ -85,14 +89,14 @@ def run(loop):
 
 if __name__ == '__main__':
     player = Player(menu.playerName)
-    gameFound = drawBoard.findGame(menu.gameCode, "host" if menu.isHost else "join")
+    gameFound = game.findGame(menu.gameCode, "host" if menu.isHost else "join")
 
     if gameFound:
-        drawBoard.isTurn = menu.isHost
-        drawBoard.gameCode = menu.gameCode
-        drawBoard.start()
+        game.isTurn = menu.isHost
+        game.gameCode = menu.gameCode
+        game.start()
 
-    if drawBoard.isTurn:
+    if game.isTurn:
         run(drawLoop)
     else:
         run(guessLoop)

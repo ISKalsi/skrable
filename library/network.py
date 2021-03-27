@@ -7,7 +7,7 @@ from abc import abstractmethod
 class Network:
     header = 4096
     format = 'utf-8'
-    interval = 0.5
+    interval = 0.1
 
     SUCCESS = 200
     FAIL = 400

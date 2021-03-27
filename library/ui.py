@@ -4,7 +4,7 @@ import random
 import string
 
 
-class Menu:
+class StartGame:
     def __init__(self):
         self.isHost = None
         self.playerName = None
@@ -32,7 +32,7 @@ class Menu:
 
                 if event == '-HOST-':
                     self.isHost = True
-                    hostJoinWindow = Menu.__host()
+                    hostJoinWindow = StartGame.__host()
 
                     event, values = hostJoinWindow.read()
                     if event == 'Copy':
@@ -47,7 +47,7 @@ class Menu:
                         gameModeWindow.UnHide()
                 elif event == '-JOIN-':
                     self.isHost = False
-                    hostJoinWindow = Menu.__join()
+                    hostJoinWindow = StartGame.__join()
 
                     while True:
                         event, values = hostJoinWindow.read()
