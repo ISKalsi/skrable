@@ -6,6 +6,11 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
+imgui = "*"
+pygame = "*"
+pygame-gui = "*"
+pysimplegui = "*"
+clipboard = "*"
 
 [requires]
 python_version = "3.8"
