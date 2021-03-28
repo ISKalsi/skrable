@@ -1,14 +1,20 @@
 class Values:
     # CAN MODIFY BELOW VALUES
     FRAMERATE = 30
-    SIZE_MW = 700, 700
-    __RATIO_DB_MW = 0.75, 0.80
+    SIZE_MAIN_WINDOW = 1270, 720
+    RATIO_DB_TO_MW = 3 / 5, 7 / 9
     SIZE_BRUSHES = 5, 6, 7, 8
 
+    PADDING = 15
+    MARGINS = 5
+    PADDING_WINDOW = 5
+
     # DO NOT TOUCH
-    SIZE_DB = tuple(x * y for x, y in zip(SIZE_MW, __RATIO_DB_MW))
-    __db_y = 50
-    __db_x = SIZE_MW[0] - SIZE_DB[0] - __db_y
+    __SIZE_DB = [x * y for x, y in zip(SIZE_MAIN_WINDOW, RATIO_DB_TO_MW)]
+    __db_y = PADDING_WINDOW + MARGINS + PADDING
+    __db_x = SIZE_MAIN_WINDOW[0] * 1 / 5 + MARGINS * 2 + PADDING
+
+    SIZE_DRAW_BOARD = __SIZE_DB[0] - 2 * (MARGINS * 2 + PADDING), __SIZE_DB[1] - 2 * __db_y
     POINT_DB = __db_x, __db_y
 
 

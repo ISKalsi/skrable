@@ -2,7 +2,7 @@ import pygame
 from threading import Lock
 from library.contants import Values, Colors
 from library.elements import DrawBoard, Game, Player
-from library.ui import StartGame
+from library.ui import StartGame, UI, DrawBoardPanel, PlayerPanel, PenPanel, GuessPanel
 
 menu = StartGame()
 
@@ -12,29 +12,42 @@ if menu.isQuit:
 pygame.init()
 pygame.display.set_caption("skrable")
 
-mainWindow = pygame.display.set_mode(Values.SIZE_MW)
+mainWindow = pygame.display.set_mode(UI.size_window)
 clock = pygame.time.Clock()
 lock = Lock()
 
 drawBoard = DrawBoard(
-    window=pygame.surface.Surface(Values.SIZE_DB),
+    window=pygame.surface.Surface(UI.size_drawBoard),
     brushSizes=Values.SIZE_BRUSHES,
     brushColors=Colors.getAllColors()
 )
 
+PlayerPanel()
+DrawBoardPanel()
+GuessPanel()
+PenPanel()
+
 game = Game(drawBoard)
 
 
-def update():
+def isQuit(event):
+    if event.type == pygame.QUIT:
+        pygame.quit()
+        exit(0)
+
+
+def update(dt):
+    UI.manager.update(dt)
+    UI.manager.draw_ui(mainWindow)
+
     mainWindow.blit(drawBoard.window, Values.POINT_DB)
+
     pygame.display.update()
 
 
 def drawLoop():
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            exit(0)
+        isQuit(event)
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             buttons = pygame.mouse.get_pressed(3)
@@ -60,14 +73,17 @@ def drawLoop():
             drawBoard.last_position = None
             drawBoard.isDrawing = False
 
+        UI.manager.process_events(event)
+
 
 def guessLoop():
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            exit(0)
+        isQuit(event)
+
         if event.type == pygame.KEYDOWN:
             pass
+
+        UI.manager.process_events(event)
 
     with lock:
         pc = game.pendingCoordinates
@@ -82,9 +98,9 @@ def guessLoop():
 
 def run(loop):
     while True:
-        clock.tick(Values.FRAMERATE)
+        delta_time = clock.tick(Values.FRAMERATE) / 1000.0
         loop()
-        update()
+        update(delta_time)
 
 
 if __name__ == '__main__':
@@ -100,3 +116,4 @@ if __name__ == '__main__':
         run(drawLoop)
     else:
         run(guessLoop)
+    run(drawLoop)
