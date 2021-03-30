@@ -119,45 +119,22 @@ class StartGame:
         return sg.Window('', layout, no_titlebar=True, font="any 19")
 
 
-class UI:
-    class ClassProperty:
-        def __init__(self, getter):
-            self.getter = getter
-
-        def __get__(self, instance, owner):
-            return self.getter(owner)
-
-    size_window = Values.SIZE_MAIN_WINDOW
-    size_drawBoard = Values.SIZE_DRAW_BOARD
-
-    padding_window = Values.PADDING_WINDOW
-    padding = Values.PADDING
-    margin = Values.MARGINS
-
-    __manager = None
-
-    @ClassProperty
-    def manager(self) -> gui.UIManager:
-        if self.__manager is None:
-            self.__manager = gui.UIManager(Values.SIZE_MAIN_WINDOW)
-        return self.__manager
-
-
 class GuessPanel:
     def __init__(self):
         size = Values.SIZE_MAIN_WINDOW
         ratio = (1 - Values.RATIO_DB_TO_MW[0]) / 2
 
-        x = -UI.padding_window - UI.margin
-        y = UI.padding_window + UI.margin
+        x = -UI.PADDING_WIN - UI.MARGIN
+        y = UI.PADDING_WIN + UI.MARGIN
 
-        width = size[0] * ratio - (UI.padding_window + 2 * UI.margin)
-        height = size[1] - 2 * (UI.padding_window + UI.margin)
+        width = size[0] * ratio - (UI.PADDING_WIN + 2 * UI.MARGIN)
+        height = size[1] - 2 * (UI.PADDING_WIN + UI.MARGIN)
 
         rect = Rect(0, 0, width, height)
         rect.topright = (x, y)
 
         self.panel = guiElements.UIPanel(
+            object_id="guessPanel",
             relative_rect=rect,
             starting_layer_height=0,
             manager=UI.manager,
@@ -168,17 +145,18 @@ class GuessPanel:
                 "bottom": "bottom"
             },
             margins={
-                "left": UI.padding,
-                "top": UI.padding,
-                "right": UI.padding,
-                "bottom": UI.padding
+                "left": UI.PADDING,
+                "top": UI.PADDING,
+                "right": UI.PADDING,
+                "bottom": UI.PADDING
             }
         )
 
-        rect = Rect((0, 0), (width - 2 * UI.padding, 2 * UI.padding))
+        rect = Rect((0, 0), (width - 2 * UI.PADDING, 2 * UI.PADDING))
         rect.bottomleft = (0, 0)
 
         self.guessInput = guiElements.UITextEntryLine(
+            object_id="guessInput",
             relative_rect=rect,
             manager=UI.manager,
             container=self.panel,
@@ -190,33 +168,70 @@ class GuessPanel:
             }
         )
 
-        width -= 2 * UI.padding
-        height -= 3 * UI.padding + self.guessInput.rect.h
+        width -= 2 * UI.PADDING
+        height -= 3 * UI.PADDING + self.guessInput.rect.h
         rect = Rect((0, 0), (width, height))
 
         self.guessBox = guiElements.UITextBox(
+            object_id="guessBox",
             html_text="",
             relative_rect=rect,
             manager=UI.manager,
             container=self.panel
         )
 
+        self.guessBox.scroll_bar_width = 3
+
+    def addGuess(self, *guesses):
+        self.guessInput.set_text("")
+
+        for guess in guesses:
+            self.guessBox.html_text += "<br>" + guess
+        self.guessBox.rebuild()
+
+    def disableGuessInput(self):
+        self.guessBox.disable()
+
+    def enableGuessInput(self):
+        self.guessBox.enable()
+
+
+class WordPanel:
+    def __init__(self):
+        size = Values.SIZE_MAIN_WINDOW
+        ratio = Values.RATIO_DB_TO_MW[0], (1 - Values.RATIO_DB_TO_MW[1]) * (1 - Values.RATIO_PP)
+
+        x = size[0] * ((1 - ratio[0]) / 2) + UI.MARGIN * 2
+        y = UI.PADDING_WIN + UI.MARGIN
+
+        width = size[0] * ratio[0] - (4 * UI.MARGIN)
+        height = size[1] * ratio[1] - (UI.PADDING_WIN + 2 * UI.MARGIN)
+
+        rect = Rect(x, y, width, height)
+        self.panel = guiElements.UIPanel(
+            object_id="wordPanel",
+            relative_rect=rect,
+            starting_layer_height=0,
+            manager=UI.manager
+        )
+
 
 class PenPanel:
     def __init__(self):
         size = Values.SIZE_MAIN_WINDOW
-        ratio = Values.RATIO_DB_TO_MW[0], 1 - Values.RATIO_DB_TO_MW[1]
+        ratio = Values.RATIO_DB_TO_MW[0], (1 - Values.RATIO_DB_TO_MW[1]) * Values.RATIO_PP
 
-        x = size[0] * ((1 - ratio[0]) / 2) + UI.margin * 2
-        y = - UI.padding_window - UI.margin
+        x = size[0] * ((1 - ratio[0]) / 2) + UI.MARGIN * 2
+        y = - UI.PADDING_WIN - UI.MARGIN
 
-        width = size[0] * ratio[0] - (4 * UI.margin)
-        height = size[1] * ratio[1] - (UI.padding_window + 2 * UI.margin)
+        width = size[0] * ratio[0] - (4 * UI.MARGIN)
+        height = size[1] * ratio[1] - (UI.PADDING_WIN + 2 * UI.MARGIN)
 
         rect = Rect(0, 0, width, height)
         rect.bottomleft = (x, y)
 
         self.panel = guiElements.UIPanel(
+            object_id="penPanel",
             relative_rect=rect,
             starting_layer_height=0,
             manager=UI.manager,
@@ -234,23 +249,24 @@ class DrawBoardPanel:
         size = Values.SIZE_MAIN_WINDOW
         ratio = Values.RATIO_DB_TO_MW
 
-        x = size[0] * ((1 - ratio[0]) / 2) + UI.margin * 2
-        y = UI.padding_window + UI.margin
+        x = Values.POINT_DB[0] - UI.PADDING
+        y = Values.POINT_DB[1] - UI.PADDING
 
-        width = size[0] * ratio[0] - (4 * UI.margin)
-        height = size[1] * ratio[1] - (UI.padding_window + 2 * UI.margin)
+        width = size[0] * ratio[0] - (4 * UI.MARGIN)
+        height = size[1] * ratio[1] - (UI.PADDING_WIN + 2 * UI.MARGIN)
 
         rect = Rect(x, y, width, height)
 
         self.panel = guiElements.UIPanel(
+            object_id="drawBoardPanel",
             relative_rect=rect,
             starting_layer_height=0,
             manager=UI.manager,
             margins={
-                "left": UI.padding,
-                "top": UI.padding,
-                "right": UI.padding,
-                "bottom": UI.padding
+                "left": UI.PADDING,
+                "top": UI.PADDING,
+                "right": UI.PADDING,
+                "bottom": UI.PADDING
             }
         )
 
@@ -260,60 +276,44 @@ class PlayerPanel:
         size = Values.SIZE_MAIN_WINDOW
         ratio = (1 - Values.RATIO_DB_TO_MW[0]) / 2
 
-        x = UI.padding_window + UI.margin
-        y = UI.padding_window + UI.margin
+        x = UI.PADDING_WIN + UI.MARGIN
+        y = UI.PADDING_WIN + UI.MARGIN
 
-        width = size[0] * ratio - (UI.padding_window + 2 * UI.margin)
-        height = size[1] - 2 * (UI.padding_window + UI.margin)
+        width = size[0] * ratio - (UI.PADDING_WIN + 2 * UI.MARGIN)
+        height = size[1] - 2 * (UI.PADDING_WIN + UI.MARGIN)
 
         rect = Rect(x, y, width, height)
 
         self.panel = guiElements.UIPanel(
+            object_id="playerPanel",
             relative_rect=rect,
             starting_layer_height=0,
             manager=UI.manager,
         )
 
 
-if __name__ == '__main__':
-    import pygame
+class UI:
+    SIZE_MW = Values.SIZE_MAIN_WINDOW
+    SIZE_DB = Values.SIZE_DRAW_BOARD
 
-    pygame.init()
-    pygame.display.set_caption("UI Test")
-    display = pygame.display.set_mode(Values.SIZE_MAIN_WINDOW)
-    display.fill(UI.manager.ui_theme.get_colour("dark_bg"))
+    PADDING_WIN = Values.PADDING_WINDOW
+    PADDING = Values.PADDING
+    MARGIN = Values.MARGINS
 
-    clock = pygame.time.Clock()
-    surface = pygame.surface.Surface((500, 500))
-    surface.fill((25, 25, 25))
+    manager: gui.UIManager
 
-    playerPanel = PlayerPanel()
-    drawBoardPanel = DrawBoardPanel()
-    guessPanel = GuessPanel()
-    penPanel = PenPanel()
+    panelPlayer: PlayerPanel
+    panelDrawBoard: DrawBoardPanel
+    panelGuess: GuessPanel
+    panelPen = PenPanel
+    panelWord = WordPanel
 
-    isRunning = True
-    while isRunning:
-        time_delta = clock.tick(60) / 1000.0
+    @classmethod
+    def init(cls):
+        cls.manager = gui.UIManager(Values.SIZE_MAIN_WINDOW)
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                isRunning = False
-
-            if event.type == pygame.USEREVENT:
-                if event.user_type == gui.UI_BUTTON_PRESSED:
-                    pass
-                    # if event.ui_element == hello_button:
-                    #     print('Hello World!')
-
-                if event.user_type == gui.UI_TEXT_ENTRY_FINISHED:
-                    pass
-                    # if event.ui_element == textEntry:
-                    #     print(textEntry.get_text())
-
-            UI.manager.process_events(event)
-
-        UI.manager.update(time_delta)
-        UI.manager.draw_ui(display)
-
-        pygame.display.update()
+        cls.panelPlayer = PlayerPanel()
+        cls.panelDrawBoard = DrawBoardPanel()
+        cls.panelGuess = GuessPanel()
+        cls.panelPen = PenPanel()
+        cls.panelWord = WordPanel()

@@ -64,7 +64,7 @@ class Game(Client):
         }
 
         self.__isTurn = True
-        self.__guesses = []
+        self.guesses = []
 
     @property
     def isDrawing(self):
@@ -99,8 +99,12 @@ class Game(Client):
     def pendingCoordinates(self):
         return self.__game["pendingCoordinates"]
 
+    @property
+    def pendingGuesses(self):
+        return self.__game["pendingGuesses"]
+
     def addToPendingGuesses(self, guess):
-        self.__guesses.append(guess)
+        self.guesses.append(guess)
         self.__game["pendingGuesses"].append(guess)
 
     def addToPendingCoordinates(self, coordinate):
@@ -119,7 +123,8 @@ class Game(Client):
                 if newGuesses:
                     if newGuesses == self.EXIT:
                         break
-                    self.__guesses.extend(newGuesses)
+                    self.guesses.extend(newGuesses)
+                    self.__game["pendingGuesses"].extend(newGuesses)
 
             time.sleep(self.interval)
 

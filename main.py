@@ -1,8 +1,9 @@
 import pygame
+import pygame_gui as gui
 from threading import Lock
 from library.contants import Values, Colors
 from library.elements import DrawBoard, Game, Player
-from library.ui import StartGame, UI, DrawBoardPanel, PlayerPanel, PenPanel, GuessPanel
+from library.ui import StartGame, UI
 
 menu = StartGame()
 
@@ -12,21 +13,17 @@ if menu.isQuit:
 pygame.init()
 pygame.display.set_caption("skrable")
 
-mainWindow = pygame.display.set_mode(UI.size_window)
+mainWindow = pygame.display.set_mode(UI.SIZE_MW)
 clock = pygame.time.Clock()
 lock = Lock()
 
 drawBoard = DrawBoard(
-    window=pygame.surface.Surface(UI.size_drawBoard),
+    window=pygame.surface.Surface(UI.SIZE_DB),
     brushSizes=Values.SIZE_BRUSHES,
     brushColors=Colors.getAllColors()
 )
 
-PlayerPanel()
-DrawBoardPanel()
-GuessPanel()
-PenPanel()
-
+UI.init()
 game = Game(drawBoard)
 
 
@@ -37,6 +34,7 @@ def isQuit(event):
 
 
 def update(dt):
+
     UI.manager.update(dt)
     UI.manager.draw_ui(mainWindow)
 
@@ -46,6 +44,7 @@ def update(dt):
 
 
 def drawLoop():
+    UI.panelGuess.disableGuessInput()
     for event in pygame.event.get():
         isQuit(event)
 
@@ -75,13 +74,23 @@ def drawLoop():
 
         UI.manager.process_events(event)
 
+    with lock:
+        pg = game.pendingGuesses
+        for guess in pg:
+            UI.panelGuess.addGuess(guess)
+            pg.pop(0)
+
 
 def guessLoop():
+    UI.panelGuess.enableGuessInput()
     for event in pygame.event.get():
         isQuit(event)
 
-        if event.type == pygame.KEYDOWN:
-            pass
+        if event.type == pygame.USEREVENT:
+            if event.user_type == gui.UI_TEXT_ENTRY_FINISHED:
+                if event.ui_object_id == "guessPanel.guessInput" and event.text:
+                    game.addToPendingGuesses(event.text)
+                    UI.panelGuess.addGuess(event.text)
 
         UI.manager.process_events(event)
 
