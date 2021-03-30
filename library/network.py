@@ -35,6 +35,7 @@ class Network:
 class Server(Network):
     def __init__(self):
         super(Server, self).__init__()
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(self.address)
         self.clientN = 0
 
