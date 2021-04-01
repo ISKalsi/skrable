@@ -13,6 +13,8 @@ class Network:
     FAIL = 400
     EXIT = 600
     DISCONNECT = 800
+    WAIT = 1000
+    ABORT = 1200
 
     def __init__(self):
         self.host = socket.gethostbyname(socket.gethostname())
@@ -40,12 +42,14 @@ class Server(Network):
         self.clientN = 0
 
     @abstractmethod
-    def processData(self, data, addr):
+    def processData(self, data, conn, addr):
         """
         override this function in the child class.
 
         :param data: msg received from client
         :type data: Any
+        :param conn: socket object
+        :type conn: socket.socket
         :param addr: (host, port)
         :type addr: tuple[str, int]
         :return: do anything you like with this data
@@ -62,18 +66,22 @@ class Server(Network):
             try:
                 obj = json.loads(data.decode(self.format)) if data is not None else None
                 with self.lock:
-                    msg = self.processData(obj, addr)
+                    msg = self.processData(obj, conn, addr)
+
+                if msg == self.ABORT:
+                    continue
+
                 if msg is not None:
                     jsonObject = json.dumps(msg)
                     byteObject = jsonObject.encode(self.format)
                     with self.lock:
-                        conn.send(byteObject)
+                        conn.sendall(byteObject)
                 else:
                     msg = ""
                     jsonObject = json.dumps(msg)
                     byteObject = jsonObject.encode(self.format)
                     with self.lock:
-                        conn.send(byteObject)
+                        conn.sendall(byteObject)
             except KeyboardInterrupt:
                 print("Closing server...")
                 break
@@ -84,6 +92,30 @@ class Server(Network):
         conn.close()
         self.clientN -= 1
         print("[CONNECTION CLOSED]", addr, end='\n\n')
+
+    def _requestClient(self, conn):
+        try:
+            data = conn.recv(self.header)
+            msg = json.loads(data.decode(self.format))
+
+            if msg == self.FAIL:
+                raise Exception("Failure triggered from server")
+
+            return msg
+        except KeyboardInterrupt:
+            print("\nDisconnecting...")
+        # except Exception as e:
+        #     print(e)
+
+    def _sendToClient(self, conn, msg):
+        try:
+            jsonObject = json.dumps(msg)
+            byteObject = jsonObject.encode(self.format)
+            conn.sendall(byteObject)
+        except KeyboardInterrupt:
+            print("\nDisconnecting...")
+        # except Exception as e:
+        #     print(e)
 
     def run(self):
         self.sock.listen()

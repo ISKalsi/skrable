@@ -5,6 +5,7 @@ class Values:
     RATIO_DB_TO_MW = 3 / 5, 6 / 9
     RATIO_PP = 2 / 3
     SIZE_BRUSHES = 5, 6, 7, 8
+    SIZE_CHOOSING_BUTTON = 150, 40
 
     PADDING = 15
     MARGINS = 3

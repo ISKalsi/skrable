@@ -190,10 +190,10 @@ class GuessPanel:
         self.guessBox.rebuild()
 
     def disableGuessInput(self):
-        self.guessBox.disable()
+        self.guessInput.disable()
 
     def enableGuessInput(self):
-        self.guessBox.enable()
+        self.guessInput.enable()
 
 
 class WordPanel:
@@ -214,6 +214,22 @@ class WordPanel:
             starting_layer_height=0,
             manager=UI.manager
         )
+
+        rect = Rect(x + width / 3, y, width / 3, height)
+        self.word = guiElements.UILabel(
+            text="",
+            object_id="wordLabel",
+            relative_rect=rect,
+            manager=UI.manager,
+            container=self.panel
+        )
+
+    def setWord(self, word, isHost):
+        if isHost:
+            self.word.set_text(word)
+        else:
+            word = ["_" if ch != " " else " " for ch in word]
+            self.word.set_text(" ".join(word))
 
 
 class PenPanel:
@@ -246,7 +262,7 @@ class PenPanel:
 
 class DrawBoardPanel:
     def __init__(self):
-        size = Values.SIZE_MAIN_WINDOW
+        size = UI.SIZE_MW
         ratio = Values.RATIO_DB_TO_MW
 
         x = Values.POINT_DB[0] - UI.PADDING
@@ -269,6 +285,65 @@ class DrawBoardPanel:
                 "bottom": UI.PADDING
             }
         )
+
+        self.__choosingOverlayContainer = guiElements.UIPanel(
+            object_id="panelOverlay",
+            relative_rect=Rect((x + UI.PADDING, y + UI.PADDING), UI.SIZE_DB),
+            manager=UI.manager,
+            starting_layer_height=4,
+        )
+
+        self.__choosingWordLabel = guiElements.UILabel(
+            object_id="overlay",
+            text="choosing word...",
+            relative_rect=Rect((0, 0), UI.SIZE_DB),
+            manager=UI.manager,
+            container=self.__choosingOverlayContainer,
+        )
+
+        self.__buttons = []
+
+        dy = UI.SIZE_BTN[1] * 3 / 2 + UI.MARGIN
+
+        x = UI.SIZE_DB[0] / 2
+        y = UI.SIZE_DB[1] / 2 - dy
+
+        for i in range(3):
+            rect_btn = Rect((0, 0), UI.SIZE_BTN)
+            rect_btn.center = x, y + i * dy
+
+            btn = guiElements.UIButton(
+                object_id=f"choice{i}",
+                relative_rect=rect_btn,
+                text="",
+                manager=UI.manager,
+                container=self.__choosingOverlayContainer,
+                visible=False
+            )
+            self.__buttons.append(btn)
+
+    def __toggleVisibility(self, isDrawing):
+        if isDrawing:
+            for button in self.__buttons:
+                button.show()
+            self.__choosingWordLabel.hide()
+        else:
+            for button in self.__buttons:
+                button.hide()
+            self.__choosingWordLabel.show()
+
+    def showChoosingWordOverlay(self, words=None):
+        self.__choosingOverlayContainer.show()
+
+        if words:
+            for button, word in zip(self.__buttons, words):
+                button.set_text(word)
+            self.__toggleVisibility(isDrawing=True)
+        else:
+            self.__toggleVisibility(isDrawing=False)
+
+    def hideChoosingWordOverlay(self):
+        self.__choosingOverlayContainer.hide()
 
 
 class PlayerPanel:
@@ -295,6 +370,7 @@ class PlayerPanel:
 class UI:
     SIZE_MW = Values.SIZE_MAIN_WINDOW
     SIZE_DB = Values.SIZE_DRAW_BOARD
+    SIZE_BTN = Values.SIZE_CHOOSING_BUTTON
 
     PADDING_WIN = Values.PADDING_WINDOW
     PADDING = Values.PADDING
@@ -310,7 +386,7 @@ class UI:
 
     @classmethod
     def init(cls):
-        cls.manager = gui.UIManager(Values.SIZE_MAIN_WINDOW)
+        cls.manager = gui.UIManager(Values.SIZE_MAIN_WINDOW, "library/theme.json")
 
         cls.panelPlayer = PlayerPanel()
         cls.panelDrawBoard = DrawBoardPanel()

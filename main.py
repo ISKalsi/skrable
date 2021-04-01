@@ -33,18 +33,45 @@ def isQuit(event):
         exit(0)
 
 
-def update(dt):
-
+def update(dt, blitDrawBoard):
     UI.manager.update(dt)
     UI.manager.draw_ui(mainWindow)
 
-    mainWindow.blit(drawBoard.window, Values.POINT_DB)
+    mainWindow.blit(drawBoard.window, Values.POINT_DB) if blitDrawBoard else ...
 
     pygame.display.update()
 
 
+def chooseWordLoop():
+    for event in pygame.event.get():
+        isQuit(event)
+
+        if event.type == pygame.USEREVENT:
+            if event.user_type == gui.UI_BUTTON_PRESSED:
+                objID = event.ui_object_id.split(".")
+
+                if objID[0] == "panelOverlay":
+                    game.word = event.ui_element.text
+                    return False
+
+        UI.manager.process_events(event)
+
+    return True
+
+
+def waitWordLoop():
+    for event in pygame.event.get():
+        isQuit(event)
+        UI.manager.process_events(event)
+
+    if game.wordChosen:
+        print("word chosen")
+        return False
+
+    return True
+
+
 def drawLoop():
-    UI.panelGuess.disableGuessInput()
     for event in pygame.event.get():
         isQuit(event)
 
@@ -80,9 +107,10 @@ def drawLoop():
             UI.panelGuess.addGuess(guess)
             pg.pop(0)
 
+    return True
+
 
 def guessLoop():
-    UI.panelGuess.enableGuessInput()
     for event in pygame.event.get():
         isQuit(event)
 
@@ -104,12 +132,15 @@ def guessLoop():
         if pc and not drawBoard.isDrawing:
             pc.clear()
 
+    return True
 
-def run(loop):
-    while True:
+
+def run(loop, blitDrawBoard=True):
+    flag = True
+    while flag:
         delta_time = clock.tick(Values.FRAMERATE) / 1000.0
-        loop()
-        update(delta_time)
+        flag = loop()
+        update(delta_time, blitDrawBoard)
 
 
 if __name__ == '__main__':
@@ -119,10 +150,22 @@ if __name__ == '__main__':
     if gameFound:
         game.isTurn = menu.isHost
         game.gameCode = menu.gameCode
+
+    UI.panelGuess.disableGuessInput()
+    if game.isTurn:
+        UI.panelDrawBoard.showChoosingWordOverlay(game.wordChoices)
+        run(chooseWordLoop, blitDrawBoard=False)
+
         game.start()
 
-    if game.isTurn:
+        UI.panelDrawBoard.hideChoosingWordOverlay()
         run(drawLoop)
     else:
+        UI.panelDrawBoard.showChoosingWordOverlay()
+        run(waitWordLoop, blitDrawBoard=False)
+
+        game.start()
+
+        UI.panelGuess.enableGuessInput()
+        UI.panelDrawBoard.hideChoosingWordOverlay()
         run(guessLoop)
-    run(drawLoop)

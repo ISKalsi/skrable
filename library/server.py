@@ -1,12 +1,16 @@
 from library.network import Server
+from threading import Thread
+import random
+import socket
 
 
 class SkrableServer(Server):
     def __init__(self):
         super().__init__()
         self.games = {}
+        self.wordList = wordList
 
-    def processData(self, data, addr):
+    def processData(self, data, conn, addr):
         if data is None:
             return self.FAIL
 
@@ -24,18 +28,28 @@ class SkrableServer(Server):
                 return self.EXIT
 
             if data["type"] == "host":
-                game["pendingCoordinates"].extend(data["pendingCoordinates"])
-                game["isDrawing"] = True if data["pendingCoordinates"] else data["isDrawing"]
-                processedData = tuple(game["pendingGuesses"])
-                game["pendingGuesses"].clear()
+                if not game["word"]:
+                    Thread(target=self.__hostSelectWord, args=(game, conn)).start()
+                    processedData = self.ABORT
+                else:
+                    game["pendingCoordinates"].extend(data["pendingCoordinates"])
+                    game["isDrawing"] = True if data["pendingCoordinates"] else data["isDrawing"]
+                    processedData = tuple(game["pendingGuesses"])
+                    game["pendingGuesses"].clear()
             elif game["playerJoined"]:
-                game["pendingGuesses"].extend(data["pendingGuesses"])
-                processedData = game["isDrawing"], tuple(game["pendingCoordinates"])
-                game["pendingCoordinates"].clear()
-            else:
+                if not game["word"]:
+                    Thread(target=self.__joinSelectWord, args=(game, conn)).start()
+                    processedData = self.ABORT
+                else:
+                    game["pendingGuesses"].extend(data["pendingGuesses"])
+                    processedData = game["isDrawing"], tuple(game["pendingCoordinates"])
+                    game["pendingCoordinates"].clear()
+            elif not game["playerJoined"]:
                 print(f"Joined game... ({data['code']})")
                 game["playerJoined"] = True
                 processedData = self.SUCCESS
+            else:
+                processedData = None
 
             return processedData
         except KeyError as e:
@@ -46,6 +60,7 @@ class SkrableServer(Server):
                     self.games[data["code"]] = {
                         "pendingCoordinates": [],
                         "pendingGuesses": [],
+                        "word": "",
                         "isDrawing": False,
                         "playerJoined": False,
                         "gameActive": True
@@ -59,6 +74,23 @@ class SkrableServer(Server):
             # TODO - handle error codes
             return None
 
+    def __hostSelectWord(self, game, conn: socket.socket):
+        words = self.getNRandomWords(3)
+        self._sendToClient(conn, words)
+        game["word"] = self._requestClient(conn)["word"]
+
+    def __joinSelectWord(self, game, conn: socket.socket):
+        self._sendToClient(conn, self.WAIT)
+        while not game["word"]:
+            pass
+        self._sendToClient(conn, game["word"])
+
+    def getNRandomWords(self, N):
+        return random.sample(self.wordList, N)
+
 
 if __name__ == '__main__':
+    with open("wordlist.txt") as file:
+        wordList = set(file.readline().split(", "))
+
     SkrableServer().run()

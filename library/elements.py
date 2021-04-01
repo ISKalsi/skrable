@@ -1,5 +1,6 @@
 import pygame
 import time
+from threading import Thread
 from library.network import Client
 from library.contants import Colors, Values
 
@@ -57,6 +58,7 @@ class Game(Client):
         self.__game = {
             "code": "",
             "type": "",
+            "word": "",
             "pendingCoordinates": [],
             "pendingGuesses": [],
             "isDrawing": False,
@@ -64,7 +66,22 @@ class Game(Client):
         }
 
         self.__isTurn = True
+        self.__wordChoices = []
         self.guesses = []
+        self.wordChosen = False
+
+    @property
+    def wordChoices(self):
+        return self.__wordChoices
+
+    @property
+    def word(self):
+        return self.__game["word"]
+
+    @word.setter
+    def word(self, new):
+        self.wordChosen = True
+        self.__game["word"] = new
 
     @property
     def isDrawing(self):
@@ -120,11 +137,11 @@ class Game(Client):
 
                 newGuesses = self._receiveMsg()
 
-                if newGuesses:
-                    if newGuesses == self.EXIT:
-                        break
-                    self.guesses.extend(newGuesses)
-                    self.__game["pendingGuesses"].extend(newGuesses)
+                if newGuesses == self.EXIT:
+                    break
+
+                self.guesses.extend(newGuesses)
+                self.__game["pendingGuesses"].extend(newGuesses)
 
             time.sleep(self.interval)
 
@@ -146,8 +163,17 @@ class Game(Client):
 
             time.sleep(self.interval)
 
+    def __receiveWord(self):
+        self.word = self._receiveMsg()
+        print(self.word)
+
+    def __sendWord(self):
+        print("sending word", self.word)
+        self._sendMsg(self.__game)
+
     def run(self):
         if self.isTurn:
+            self.__sendWord()
             self.__sendDrawBoard()
         else:
             self.__receiveDrawBoard()
@@ -162,11 +188,24 @@ class Game(Client):
         if msg == self.SUCCESS:
             print(f"game {playerType}ed")
             print("Code:", code)
+
+            packet = {"code": code, "word": "", "type": playerType, "exitCode": self.SUCCESS}
+            self._sendMsg(packet)
+            wc = self.__wordChoices = self._receiveMsg()
+            print("received:", wc)
+            if wc == self.WAIT:
+                Thread(target=self.__receiveWord).start()
+
             return True
         elif msg == self.FAIL:
             print(f"game {playerType}ing failed")
         else:
             print("findGame() ->", msg)
+
+        self._sendMsg({"exitCode": self.EXIT})
+        msg = self._receiveMsg()
+        if msg and msg == self.SUCCESS:
+            print("game inactive msg sent.")
 
         return False
 

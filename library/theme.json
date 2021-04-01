@@ -1,0 +1,12 @@
+{
+  "panelOverlay": {
+    "colours": {
+      "dark_bg": "#00000099"
+    }
+  },
+  "overlay": {
+    "colours": {
+      "dark_bg": "#00000000"
+    }
+  }
+}
