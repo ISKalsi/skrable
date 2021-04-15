@@ -8,5 +8,12 @@
     "colours": {
       "dark_bg": "#00000000"
     }
+  },
+  "wordLabel": {
+    "font": {
+      "name": "roboto",
+      "size": "25",
+      "regular_path": "library/Roboto-Black.ttf"
+    }
   }
 }

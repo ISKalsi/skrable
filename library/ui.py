@@ -215,7 +215,8 @@ class WordPanel:
             manager=UI.manager
         )
 
-        rect = Rect(x + width / 3, y, width / 3, height)
+        rect = Rect(0, 0, width, height)
+        rect.center = width / 2, height / 2
         self.word = guiElements.UILabel(
             text="",
             object_id="wordLabel",
@@ -226,7 +227,7 @@ class WordPanel:
 
     def setWord(self, word, isHost):
         if isHost:
-            self.word.set_text(word)
+            self.word.set_text(word.upper())
         else:
             word = ["_" if ch != " " else " " for ch in word]
             self.word.set_text(" ".join(word))
