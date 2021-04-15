@@ -1,6 +1,5 @@
 import pygame
 import time
-from threading import Thread
 from library.network import Client
 from library.contants import Colors, Values
 
@@ -131,35 +130,33 @@ class Game(Client):
 
     def __sendDrawBoard(self):
         while True:
-            with self.lock:
-                self._sendMsg(self.__game)
-                self.__game["pendingCoordinates"].clear()
+            self._sendMsg(self.__game)
+            self.__game["pendingCoordinates"].clear()
 
-                newGuesses = self._receiveMsg()
+            newGuesses = self._receiveMsg()
 
-                if newGuesses == self.EXIT:
-                    break
+            if newGuesses == self.EXIT:
+                break
 
-                self.guesses.extend(newGuesses)
-                self.__game["pendingGuesses"].extend(newGuesses)
+            self.guesses.extend(newGuesses)
+            self.__game["pendingGuesses"].extend(newGuesses)
 
             time.sleep(self.interval)
 
     def __receiveDrawBoard(self):
         while True:
-            with self.lock:
-                self._sendMsg(self.__game)
-                self.__game["pendingGuesses"].clear()
+            self._sendMsg(self.__game)
+            self.__game["pendingGuesses"].clear()
 
-                msg = self._receiveMsg()
+            msg = self._receiveMsg()
 
-                if msg:
-                    if msg == self.EXIT:
-                        break
+            if msg:
+                if msg == self.EXIT:
+                    break
 
-                    isDrawing, pendingCoordinates = msg
-                    self.__game["pendingCoordinates"].extend(pendingCoordinates)
-                    self.drawBoard.isDrawing = self.isDrawing
+                isDrawing, pendingCoordinates = msg
+                self.__game["pendingCoordinates"].extend(pendingCoordinates)
+                self.drawBoard.isDrawing = self.isDrawing
 
             time.sleep(self.interval)
 
@@ -168,14 +165,18 @@ class Game(Client):
         print(self.word)
 
     def __sendWord(self):
+        while not self.wordChosen:
+            pass
+
         print("sending word", self.word)
-        self._sendMsg(self.__game)
+        self._sendMsg(self.word)
 
     def run(self):
         if self.isTurn:
             self.__sendWord()
             self.__sendDrawBoard()
         else:
+            self.__receiveWord()
             self.__receiveDrawBoard()
 
         print("Game InActive")
@@ -192,9 +193,10 @@ class Game(Client):
             packet = {"code": code, "word": "", "type": playerType, "exitCode": self.SUCCESS}
             self._sendMsg(packet)
             wc = self.__wordChoices = self._receiveMsg()
-            print("received:", wc)
             if wc == self.WAIT:
-                Thread(target=self.__receiveWord).start()
+                print("waiting for word")
+            else:
+                print("received:", wc)
 
             return True
         elif msg == self.FAIL:

@@ -150,22 +150,23 @@ if __name__ == '__main__':
     if gameFound:
         game.isTurn = menu.isHost
         game.gameCode = menu.gameCode
+        game.start()
+    else:
+        exit()
 
     UI.panelGuess.disableGuessInput()
     if game.isTurn:
         UI.panelDrawBoard.showChoosingWordOverlay(game.wordChoices)
         run(chooseWordLoop, blitDrawBoard=False)
 
-        game.start()
-
         UI.panelDrawBoard.hideChoosingWordOverlay()
+        UI.panelWord.setWord(game.word, isHost=True)
         run(drawLoop)
     else:
         UI.panelDrawBoard.showChoosingWordOverlay()
         run(waitWordLoop, blitDrawBoard=False)
 
-        game.start()
-
         UI.panelGuess.enableGuessInput()
+        UI.panelWord.setWord(game.word, isHost=False)
         UI.panelDrawBoard.hideChoosingWordOverlay()
         run(guessLoop)

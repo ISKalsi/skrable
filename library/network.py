@@ -1,5 +1,5 @@
 import socket
-from threading import Thread, Lock
+from threading import Thread
 import json
 from abc import abstractmethod
 
@@ -20,7 +20,6 @@ class Network:
         self.host = socket.gethostbyname(socket.gethostname())
         self.port = 8420
 
-        self.lock = Lock()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self.__exitCode = self.DISCONNECT
@@ -65,8 +64,7 @@ class Server(Network):
 
             try:
                 obj = json.loads(data.decode(self.format)) if data is not None else None
-                with self.lock:
-                    msg = self.processData(obj, conn, addr)
+                msg = self.processData(obj, conn, addr)
 
                 if msg == self.ABORT:
                     continue
@@ -74,14 +72,12 @@ class Server(Network):
                 if msg is not None:
                     jsonObject = json.dumps(msg)
                     byteObject = jsonObject.encode(self.format)
-                    with self.lock:
-                        conn.sendall(byteObject)
+                    conn.sendall(byteObject)
                 else:
                     msg = ""
                     jsonObject = json.dumps(msg)
                     byteObject = jsonObject.encode(self.format)
-                    with self.lock:
-                        conn.sendall(byteObject)
+                    conn.sendall(byteObject)
             except KeyboardInterrupt:
                 print("Closing server...")
                 break
@@ -127,6 +123,7 @@ class Server(Network):
                 self.clientN += 1
 
                 Thread(
+                    name=f"[{conn}, {addr}]",
                     target=self.__handleClient,
                     args=(conn, addr),
                     daemon=True

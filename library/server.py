@@ -1,5 +1,5 @@
 from library.network import Server
-from threading import Thread
+from threading import Lock
 import random
 import socket
 
@@ -16,6 +16,10 @@ class SkrableServer(Server):
 
         try:
             game = self.games[data["code"]]
+            if "lock" not in game.keys():
+                game["lock"] = Lock()
+
+            game["lock"].acquire()
 
             if data["exitCode"] != self.SUCCESS:
                 if data["exitCode"] == self.EXIT:
@@ -29,7 +33,8 @@ class SkrableServer(Server):
 
             if data["type"] == "host":
                 if not game["word"]:
-                    Thread(target=self.__hostSelectWord, args=(game, conn)).start()
+                    game["lock"].release()
+                    self.__hostSelectWord(game, conn)
                     processedData = self.ABORT
                 else:
                     game["pendingCoordinates"].extend(data["pendingCoordinates"])
@@ -38,7 +43,8 @@ class SkrableServer(Server):
                     game["pendingGuesses"].clear()
             elif game["playerJoined"]:
                 if not game["word"]:
-                    Thread(target=self.__joinSelectWord, args=(game, conn)).start()
+                    game["lock"].release()
+                    self.__joinSelectWord(game, conn)
                     processedData = self.ABORT
                 else:
                     game["pendingGuesses"].extend(data["pendingGuesses"])
@@ -51,6 +57,7 @@ class SkrableServer(Server):
             else:
                 processedData = None
 
+            game["lock"].release() if game["lock"].locked() else ...
             return processedData
         except KeyError as e:
             if e.args[0] == data["code"]:
@@ -77,7 +84,7 @@ class SkrableServer(Server):
     def __hostSelectWord(self, game, conn: socket.socket):
         words = self.getNRandomWords(3)
         self._sendToClient(conn, words)
-        game["word"] = self._requestClient(conn)["word"]
+        game["word"] = self._requestClient(conn)
 
     def __joinSelectWord(self, game, conn: socket.socket):
         self._sendToClient(conn, self.WAIT)
