@@ -9,11 +9,25 @@
       "dark_bg": "#00000000"
     }
   },
-  "wordLabel": {
+  "#wordPanel": {
     "font": {
       "name": "roboto",
       "size": "25",
       "regular_path": "library/Roboto-Black.ttf"
+    }
+  },
+  "wordLabel": {
+    "font": {
+      "name": "roboto-black",
+      "size": "25",
+      "regular_path": "library/Roboto-Black.ttf"
+    }
+  },
+  "timeLabel": {
+    "font": {
+      "name": "roboto-regular",
+      "size": "25",
+      "regular_path": "library/Roboto-Regular.ttf"
     }
   }
 }

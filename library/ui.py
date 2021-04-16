@@ -3,9 +3,11 @@ import pygame_gui as gui
 import pygame_gui.elements as guiElements
 from pygame.rect import Rect
 from library.contants import Values
+from threading import Thread
 import clipboard
 import random
 import string
+import time
 
 
 class StartGame:
@@ -198,6 +200,8 @@ class GuessPanel:
 
 class WordPanel:
     def __init__(self):
+        self.currentTime = "0:00"
+
         size = Values.SIZE_MAIN_WINDOW
         ratio = Values.RATIO_DB_TO_MW[0], (1 - Values.RATIO_DB_TO_MW[1]) * (1 - Values.RATIO_PP)
 
@@ -215,7 +219,7 @@ class WordPanel:
             manager=UI.manager
         )
 
-        rect = Rect(0, 0, width, height)
+        rect = Rect(0, 0, width / 3, height)
         rect.center = width / 2, height / 2
         self.word = guiElements.UILabel(
             text="",
@@ -225,12 +229,50 @@ class WordPanel:
             container=self.panel
         )
 
+        rect = Rect(0, 0, width / 8, height)
+        rect.midleft = 0, height / 2
+        self.timer = guiElements.UILabel(
+            text="1:00",
+            object_id="timeLabel",
+            relative_rect=rect,
+            manager=UI.manager,
+            container=self.panel
+        )
+
+        self.timer.hide()
+
+    def __countdown(self, timeInSec):
+        while timeInSec:
+            mins, secs = divmod(timeInSec, 60)
+            timer = '{:1d}:{:02d}'.format(mins, secs)
+            self.currentTime = timer
+            time.sleep(1)
+            timeInSec -= 1
+
+        self.currentTime = "0:00"
+
     def setWord(self, word, isHost):
         if isHost:
             self.word.set_text(word.upper())
         else:
             word = ["_" if ch != " " else " " for ch in word]
             self.word.set_text(" ".join(word))
+
+    def getWord(self):
+        return self.word.text
+
+    def isTimeUp(self):
+        return self.currentTime == "0:00"
+
+    def updateTimer(self):
+        if not self.isTimeUp():
+            self.timer.set_text(self.currentTime)
+        else:
+            self.timer.hide()
+
+    def startTimer(self, t):
+        self.timer.show()
+        Thread(name="Timer", target=self.__countdown, args=(t,), daemon=True).start()
 
 
 class PenPanel:

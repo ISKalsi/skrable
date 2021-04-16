@@ -34,6 +34,8 @@ def isQuit(event):
 
 
 def update(dt, blitDrawBoard):
+    UI.panelWord.updateTimer()
+
     UI.manager.update(dt)
     UI.manager.draw_ui(mainWindow)
 
@@ -158,15 +160,20 @@ if __name__ == '__main__':
     if game.isTurn:
         UI.panelDrawBoard.showChoosingWordOverlay(game.wordChoices)
         run(chooseWordLoop, blitDrawBoard=False)
-
         UI.panelDrawBoard.hideChoosingWordOverlay()
+
         UI.panelWord.setWord(game.word, isHost=True)
+        UI.panelWord.startTimer(60)
+
         run(drawLoop)
     else:
         UI.panelDrawBoard.showChoosingWordOverlay()
         run(waitWordLoop, blitDrawBoard=False)
+        UI.panelDrawBoard.hideChoosingWordOverlay()
 
         UI.panelGuess.enableGuessInput()
+
         UI.panelWord.setWord(game.word, isHost=False)
-        UI.panelDrawBoard.hideChoosingWordOverlay()
+        UI.panelWord.startTimer(60)
+
         run(guessLoop)
