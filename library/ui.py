@@ -122,7 +122,7 @@ class StartGame:
 
 
 class GuessPanel:
-    def __init__(self):
+    def __init__(self, uiManager):
         size = Values.SIZE_MAIN_WINDOW
         ratio = (1 - Values.RATIO_DB_TO_MW[0]) / 2
 
@@ -139,7 +139,7 @@ class GuessPanel:
             object_id="guessPanel",
             relative_rect=rect,
             starting_layer_height=0,
-            manager=UI.manager,
+            manager=uiManager,
             anchors={
                 "left": "right",
                 "right": "right",
@@ -160,7 +160,7 @@ class GuessPanel:
         self.guessInput = guiElements.UITextEntryLine(
             object_id="guessInput",
             relative_rect=rect,
-            manager=UI.manager,
+            manager=uiManager,
             container=self.panel,
             anchors={
                 "left": "left",
@@ -178,17 +178,16 @@ class GuessPanel:
             object_id="guessBox",
             html_text="",
             relative_rect=rect,
-            manager=UI.manager,
+            manager=uiManager,
             container=self.panel
         )
 
         self.guessBox.scroll_bar_width = 3
 
-    def addGuess(self, *guesses):
+    def addGuess(self, guess):
         self.guessInput.set_text("")
 
-        for guess in guesses:
-            self.guessBox.html_text += "<br>" + guess
+        self.guessBox.html_text += "<br>" + guess
         self.guessBox.rebuild()
 
     def disableGuessInput(self):
@@ -199,7 +198,7 @@ class GuessPanel:
 
 
 class WordPanel:
-    def __init__(self):
+    def __init__(self, uiManager):
         self.currentTime = "0:00"
 
         size = Values.SIZE_MAIN_WINDOW
@@ -216,7 +215,7 @@ class WordPanel:
             object_id="wordPanel",
             relative_rect=rect,
             starting_layer_height=0,
-            manager=UI.manager
+            manager=uiManager
         )
 
         rect = Rect(0, 0, width / 3, height)
@@ -225,7 +224,7 @@ class WordPanel:
             text="",
             object_id="wordLabel",
             relative_rect=rect,
-            manager=UI.manager,
+            manager=uiManager,
             container=self.panel
         )
 
@@ -235,7 +234,7 @@ class WordPanel:
             text="1:00",
             object_id="timeLabel",
             relative_rect=rect,
-            manager=UI.manager,
+            manager=uiManager,
             container=self.panel
         )
 
@@ -276,7 +275,7 @@ class WordPanel:
 
 
 class PenPanel:
-    def __init__(self):
+    def __init__(self, uiManager):
         size = Values.SIZE_MAIN_WINDOW
         ratio = Values.RATIO_DB_TO_MW[0], (1 - Values.RATIO_DB_TO_MW[1]) * Values.RATIO_PP
 
@@ -293,7 +292,7 @@ class PenPanel:
             object_id="penPanel",
             relative_rect=rect,
             starting_layer_height=0,
-            manager=UI.manager,
+            manager=uiManager,
             anchors={
                 "left": "left",
                 "right": "left",
@@ -304,7 +303,7 @@ class PenPanel:
 
 
 class DrawBoardPanel:
-    def __init__(self):
+    def __init__(self, uiManager):
         size = UI.SIZE_MW
         ratio = Values.RATIO_DB_TO_MW
 
@@ -320,7 +319,7 @@ class DrawBoardPanel:
             object_id="drawBoardPanel",
             relative_rect=rect,
             starting_layer_height=0,
-            manager=UI.manager,
+            manager=uiManager,
             margins={
                 "left": UI.PADDING,
                 "top": UI.PADDING,
@@ -329,22 +328,22 @@ class DrawBoardPanel:
             }
         )
 
-        self.__choosingOverlayContainer = guiElements.UIPanel(
+        self.panelOverlay = guiElements.UIPanel(
             object_id="panelOverlay",
             relative_rect=Rect((x + UI.PADDING, y + UI.PADDING), UI.SIZE_DB),
-            manager=UI.manager,
+            manager=uiManager,
             starting_layer_height=4,
         )
 
-        self.__choosingWordLabel = guiElements.UILabel(
+        self.choosingWord = guiElements.UILabel(
             object_id="overlay",
             text="choosing word...",
             relative_rect=Rect((0, 0), UI.SIZE_DB),
-            manager=UI.manager,
-            container=self.__choosingOverlayContainer,
+            manager=uiManager,
+            container=self.panelOverlay,
         )
 
-        self.__buttons = []
+        self.words = []
 
         dy = UI.SIZE_BTN[1] * 3 / 2 + UI.MARGIN
 
@@ -359,38 +358,38 @@ class DrawBoardPanel:
                 object_id=f"choice{i}",
                 relative_rect=rect_btn,
                 text="",
-                manager=UI.manager,
-                container=self.__choosingOverlayContainer,
+                manager=uiManager,
+                container=self.panelOverlay,
                 visible=False
             )
-            self.__buttons.append(btn)
+            self.words.append(btn)
 
     def __toggleVisibility(self, isDrawing):
         if isDrawing:
-            for button in self.__buttons:
+            for button in self.words:
                 button.show()
-            self.__choosingWordLabel.hide()
+            self.choosingWord.hide()
         else:
-            for button in self.__buttons:
+            for button in self.words:
                 button.hide()
-            self.__choosingWordLabel.show()
+            self.choosingWord.show()
 
     def showChoosingWordOverlay(self, words=None):
-        self.__choosingOverlayContainer.show()
+        self.panelOverlay.show()
 
         if words:
-            for button, word in zip(self.__buttons, words):
+            for button, word in zip(self.words, words):
                 button.set_text(word)
             self.__toggleVisibility(isDrawing=True)
         else:
             self.__toggleVisibility(isDrawing=False)
 
     def hideChoosingWordOverlay(self):
-        self.__choosingOverlayContainer.hide()
+        self.panelOverlay.hide()
 
 
 class PlayerPanel:
-    def __init__(self):
+    def __init__(self, uiManager):
         size = Values.SIZE_MAIN_WINDOW
         ratio = (1 - Values.RATIO_DB_TO_MW[0]) / 2
 
@@ -406,7 +405,7 @@ class PlayerPanel:
             object_id="playerPanel",
             relative_rect=rect,
             starting_layer_height=0,
-            manager=UI.manager,
+            manager=uiManager,
         )
 
 
@@ -419,20 +418,11 @@ class UI:
     PADDING = Values.PADDING
     MARGIN = Values.MARGINS
 
-    manager: gui.UIManager
+    def __init__(self):
+        self.manager = gui.UIManager(Values.SIZE_MAIN_WINDOW, "library/theme.json")
 
-    panelPlayer: PlayerPanel
-    panelDrawBoard: DrawBoardPanel
-    panelGuess: GuessPanel
-    panelPen = PenPanel
-    panelWord = WordPanel
-
-    @classmethod
-    def init(cls):
-        cls.manager = gui.UIManager(Values.SIZE_MAIN_WINDOW, "library/theme.json")
-
-        cls.panelPlayer = PlayerPanel()
-        cls.panelDrawBoard = DrawBoardPanel()
-        cls.panelGuess = GuessPanel()
-        cls.panelPen = PenPanel()
-        cls.panelWord = WordPanel()
+        self.panelPlayer = PlayerPanel(self.manager)
+        self.panelDrawBoard = DrawBoardPanel(self.manager)
+        self.panelGuess = GuessPanel(self.manager)
+        self.panelPen = PenPanel(self.manager)
+        self.panelWord = WordPanel(self.manager)

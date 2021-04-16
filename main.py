@@ -23,7 +23,7 @@ drawBoard = DrawBoard(
     brushColors=Colors.getAllColors()
 )
 
-UI.init()
+ui = UI()
 game = Game(drawBoard)
 
 
@@ -34,10 +34,10 @@ def isQuit(event):
 
 
 def update(dt, blitDrawBoard):
-    UI.panelWord.updateTimer()
+    ui.panelWord.updateTimer()
 
-    UI.manager.update(dt)
-    UI.manager.draw_ui(mainWindow)
+    ui.manager.update(dt)
+    ui.manager.draw_ui(mainWindow)
 
     mainWindow.blit(drawBoard.window, Values.POINT_DB) if blitDrawBoard else ...
 
@@ -56,7 +56,7 @@ def chooseWordLoop():
                     game.word = event.ui_element.text
                     return False
 
-        UI.manager.process_events(event)
+        ui.manager.process_events(event)
 
     return True
 
@@ -64,7 +64,7 @@ def chooseWordLoop():
 def waitWordLoop():
     for event in pygame.event.get():
         isQuit(event)
-        UI.manager.process_events(event)
+        ui.manager.process_events(event)
 
     if game.wordChosen:
         print("word chosen")
@@ -101,12 +101,12 @@ def drawLoop():
             drawBoard.last_position = None
             drawBoard.isDrawing = False
 
-        UI.manager.process_events(event)
+        ui.manager.process_events(event)
 
     with lock:
         pg = game.pendingGuesses
         for guess in pg:
-            UI.panelGuess.addGuess(guess)
+            ui.panelGuess.addGuess(guess)
             pg.pop(0)
 
     return True
@@ -120,9 +120,9 @@ def guessLoop():
             if event.user_type == gui.UI_TEXT_ENTRY_FINISHED:
                 if event.ui_object_id == "guessPanel.guessInput" and event.text:
                     game.addToPendingGuesses(event.text)
-                    UI.panelGuess.addGuess(event.text)
+                    ui.panelGuess.addGuess(event.text)
 
-        UI.manager.process_events(event)
+        ui.manager.process_events(event)
 
     with lock:
         pc = game.pendingCoordinates
@@ -156,24 +156,29 @@ if __name__ == '__main__':
     else:
         exit()
 
-    UI.panelGuess.disableGuessInput()
-    if game.isTurn:
-        UI.panelDrawBoard.showChoosingWordOverlay(game.wordChoices)
-        run(chooseWordLoop, blitDrawBoard=False)
-        UI.panelDrawBoard.hideChoosingWordOverlay()
+    rounds = 2
 
-        UI.panelWord.setWord(game.word, isHost=True)
-        UI.panelWord.startTimer(60)
+    for _ in range(rounds * 2):
+        ui.panelGuess.disableGuessInput()
+        if game.isTurn:
+            ui.panelDrawBoard.showChoosingWordOverlay(game.wordChoices)
+            run(chooseWordLoop, blitDrawBoard=False)
+            ui.panelDrawBoard.hideChoosingWordOverlay()
 
-        run(drawLoop)
-    else:
-        UI.panelDrawBoard.showChoosingWordOverlay()
-        run(waitWordLoop, blitDrawBoard=False)
-        UI.panelDrawBoard.hideChoosingWordOverlay()
+            ui.panelWord.setWord(game.word, isHost=True)
+            ui.panelWord.startTimer(60)
 
-        UI.panelGuess.enableGuessInput()
+            run(drawLoop)
+        else:
+            ui.panelDrawBoard.showChoosingWordOverlay()
+            run(waitWordLoop, blitDrawBoard=False)
+            ui.panelDrawBoard.hideChoosingWordOverlay()
 
-        UI.panelWord.setWord(game.word, isHost=False)
-        UI.panelWord.startTimer(60)
+            ui.panelGuess.enableGuessInput()
 
-        run(guessLoop)
+            ui.panelWord.setWord(game.word, isHost=False)
+            ui.panelWord.startTimer(60)
+
+            run(guessLoop)
+
+        game.isTurn = not game.isTurn
