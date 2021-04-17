@@ -34,7 +34,7 @@ class StartGame:
                 nameWindow.close()
                 return True
             elif event == 'OK':
-                self.playerName = values['-NAME-']
+                self.playerName = values['-NAME-'][0:7]
                 nameWindow.hide()
 
             gameModeWindow = self.__gameMode()
