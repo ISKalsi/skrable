@@ -2,6 +2,7 @@ import pygame
 import time
 from library.network import Client
 from library.contants import Colors, Values
+from threading import Thread
 
 
 # TODO - disconnect/exit implementation
@@ -50,13 +51,15 @@ class DrawBoard:
 
 
 class Game(Client):
-    def __init__(self, drawBoard):
+    def __init__(self, name, code, isHost, drawBoard):
         super().__init__()
 
         self.drawBoard = drawBoard
         self.__game = {
-            "code": "",
-            "type": "",
+            "name": name,
+            "opponent": "",
+            "code": code,
+            "type": "host" if isHost else "join",
             "word": "",
             "pendingCoordinates": [],
             "pendingGuesses": [],
@@ -64,10 +67,18 @@ class Game(Client):
             "exitCode": self.SUCCESS
         }
 
-        self.__isTurn = True
+        self.__isTurn = isHost
         self.__wordChoices = []
         self.guesses = []
         self.wordChosen = False
+
+    @property
+    def playerName(self):
+        return self.__game["name"]
+
+    @property
+    def opponentName(self):
+        return self.__game["opponent"]
 
     @property
     def wordChoices(self):
@@ -170,33 +181,27 @@ class Game(Client):
 
         print("sending word", self.word)
         self._sendMsg(self.word)
+        print("sent")
 
     def run(self):
         if self.isTurn:
-            self.__sendWord()
             self.__sendDrawBoard()
         else:
-            self.__receiveWord()
             self.__receiveDrawBoard()
 
         print("Game InActive")
 
-    def findGame(self, code, playerType):
+    def newGame(self):
         self._establishConnection()
 
-        self._sendMsg({"code": code, "type": playerType, "exitCode": self.SUCCESS})
+        playerType = "host" if self.isTurn else "join"
+        self._sendMsg({"code": self.gameCode, "name": self.playerName, "type": playerType, "exitCode": self.SUCCESS})
         msg = self._receiveMsg()
         if msg == self.SUCCESS:
             print(f"game {playerType}ed")
-            print("Code:", code)
+            print("Code:", self.gameCode)
 
-            packet = {"code": code, "word": "", "type": playerType, "exitCode": self.SUCCESS}
-            self._sendMsg(packet)
-            wc = self.__wordChoices = self._receiveMsg()
-            if wc == self.WAIT:
-                print("waiting for word")
-            else:
-                print("received:", wc)
+            Thread(name="setupGame", target=self.__setupGame, daemon=True).start()
 
             return True
         elif msg == self.FAIL:
@@ -204,12 +209,26 @@ class Game(Client):
         else:
             print("findGame() ->", msg)
 
-        self._sendMsg({"exitCode": self.EXIT})
-        msg = self._receiveMsg()
-        if msg and msg == self.SUCCESS:
-            print("game inactive msg sent.")
-
         return False
+
+    def __setupGame(self):
+        if self.isTurn:
+            joinName = self._receiveMsg()
+            if joinName:
+                self.__game["opponent"] = joinName
+                wc = self.__wordChoices = self._receiveMsg()
+                print("received:", wc)
+            else:
+                print("error setting up host")
+            self.__sendWord()
+        else:
+            hostName = self._receiveMsg()
+            if hostName:
+                self.__game["opponent"] = hostName
+            else:
+                print("error setting up host")
+            print("waiting for word")
+            self.__receiveWord()
 
     def __del__(self):
         msg = {

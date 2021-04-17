@@ -1,5 +1,6 @@
 import PySimpleGUI as sg
 import pygame_gui as gui
+from pygame_gui.core import ObjectID as OID
 import pygame_gui.elements as guiElements
 from pygame.rect import Rect
 from library.contants import Values
@@ -8,6 +9,11 @@ import clipboard
 import random
 import string
 import time
+
+
+def fitRectToLabel(label: guiElements.UILabel):
+    print(label.font.size(label.text))
+    label.set_dimensions(label.font.size(label.text))
 
 
 class StartGame:
@@ -335,9 +341,9 @@ class DrawBoardPanel:
             starting_layer_height=4,
         )
 
-        self.choosingWord = guiElements.UILabel(
+        self.textWord = guiElements.UILabel(
             object_id="overlay",
-            text="choosing word...",
+            text=UI.CHOOSING_WORD,
             relative_rect=Rect((0, 0), UI.SIZE_DB),
             manager=uiManager,
             container=self.panelOverlay,
@@ -368,13 +374,16 @@ class DrawBoardPanel:
         if isDrawing:
             for button in self.words:
                 button.show()
-            self.choosingWord.hide()
+            self.textWord.hide()
         else:
             for button in self.words:
                 button.hide()
-            self.choosingWord.show()
+            self.textWord.show()
 
-    def showChoosingWordOverlay(self, words=None):
+    def setTextOverlayText(self, text):
+        self.textWord.set_text(text)
+
+    def showTextOverlay(self, words=None):
         self.panelOverlay.show()
 
         if words:
@@ -384,11 +393,15 @@ class DrawBoardPanel:
         else:
             self.__toggleVisibility(isDrawing=False)
 
-    def hideChoosingWordOverlay(self):
+    def hideTextOverlay(self):
         self.panelOverlay.hide()
 
 
 class PlayerPanel:
+    CARD_HEIGHT = 60
+    PLAYER_COUNT = 0
+    RANK_WIDTH = 55
+
     def __init__(self, uiManager):
         size = Values.SIZE_MAIN_WINDOW
         ratio = (1 - Values.RATIO_DB_TO_MW[0]) / 2
@@ -406,7 +419,83 @@ class PlayerPanel:
             relative_rect=rect,
             starting_layer_height=0,
             manager=uiManager,
+            margins={
+                "left": UI.PADDING,
+                "top": UI.PADDING,
+                "right": UI.PADDING,
+                "bottom": UI.PADDING
+            }
         )
+
+        self.players = []
+
+    def addPlayer(self, name, score=0, rank=1):
+        num = PlayerPanel.PLAYER_COUNT
+        cardH = PlayerPanel.CARD_HEIGHT
+        rankW = PlayerPanel.RANK_WIDTH
+
+        cardY = (cardH + UI.MARGIN) * num
+        cardW = self.panel.rect.w - 2 * UI.PADDING
+
+        rect = Rect((0, cardY), (cardW, cardH))
+        player = guiElements.UIPanel(
+            object_id=OID(f"player{num}", "player"),
+            relative_rect=rect,
+            manager=self.panel.ui_manager,
+            container=self.panel,
+            starting_layer_height=1
+        )
+
+        rect = Rect(0, 0, rankW, player.panel_container.rect.h)
+        rankLabel = guiElements.UILabel(
+            object_id=OID(f"rank{num}", "rank"),
+            text=f"#{rank}",
+            relative_rect=rect,
+            manager=self.panel.ui_manager,
+            container=player,
+            anchors={
+                "left": "left",
+                "right": "left",
+                "top": "top",
+                "bottom": "bottom"
+            }
+        )
+
+        nameW = player.rect.w - 2 * rankW
+        nameH = player.panel_container.rect.h * 0.65
+
+        rect = Rect(rankW, 0, nameW, nameH)
+        nameLabel = guiElements.UILabel(
+            object_id=OID(f"name{num}", "name"),
+            text=name.strip(),
+            relative_rect=rect,
+            manager=self.panel.ui_manager,
+            container=player,
+            anchors={
+                "left": "left",
+                "right": "right",
+                "top": "top",
+                "bottom": "bottom"
+            }
+        )
+
+        rect.bottomleft = (rankW, player.panel_container.rect.h + 6)
+        scoreLabel = guiElements.UILabel(
+            object_id=OID(f"score{num}", "score"),
+            text=f"score: {score}",
+            relative_rect=rect,
+            manager=self.panel.ui_manager,
+            container=player,
+            anchors={
+                "left": "left",
+                "right": "right",
+                "top": "top",
+                "bottom": "bottom"
+            }
+        )
+
+        PlayerPanel.PLAYER_COUNT += 1
+        self.players.append((nameLabel, scoreLabel, rankLabel, player))
 
 
 class UI:
@@ -418,6 +507,9 @@ class UI:
     PADDING = Values.PADDING
     MARGIN = Values.MARGINS
 
+    CHOOSING_WORD = "choosing word..."
+    WAITING_FOR_PLAYER = "waiting for player..."
+
     def __init__(self):
         self.manager = gui.UIManager(Values.SIZE_MAIN_WINDOW, "library/theme.json")
 
@@ -426,3 +518,9 @@ class UI:
         self.panelGuess = GuessPanel(self.manager)
         self.panelPen = PenPanel(self.manager)
         self.panelWord = WordPanel(self.manager)
+
+    def addGuess(self, *guesses):
+        word = self.panelWord.getWord()
+        for guess in guesses:
+            if guess == word:
+                pass

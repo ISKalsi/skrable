@@ -24,7 +24,7 @@ drawBoard = DrawBoard(
 )
 
 ui = UI()
-game = Game(drawBoard)
+game = Game(menu.playerName, menu.gameCode, menu.isHost, drawBoard)
 
 
 def isQuit(event):
@@ -42,6 +42,17 @@ def update(dt, blitDrawBoard):
     mainWindow.blit(drawBoard.window, Values.POINT_DB) if blitDrawBoard else ...
 
     pygame.display.update()
+
+
+def waitForPlayerLoop():
+    for event in pygame.event.get():
+        isQuit(event)
+        ui.manager.process_events(event)
+
+    if game.opponentName:
+        return False
+
+    return True
 
 
 def chooseWordLoop():
@@ -147,37 +158,54 @@ def run(loop, blitDrawBoard=True):
 
 if __name__ == '__main__':
     player = Player(menu.playerName)
-    gameFound = game.findGame(menu.gameCode, "host" if menu.isHost else "join")
+    proceededToSetup = game.newGame()
 
-    if gameFound:
-        game.isTurn = menu.isHost
-        game.gameCode = menu.gameCode
-        game.start()
-    else:
+    if not proceededToSetup:
         exit()
+
+    ui.panelGuess.disableGuessInput()
+
+    ui.panelDrawBoard.setTextOverlayText(UI.WAITING_FOR_PLAYER)
+    ui.panelDrawBoard.showTextOverlay()
+    run(waitForPlayerLoop, blitDrawBoard=False)
+    ui.panelDrawBoard.hideTextOverlay()
+
+    if not game.isTurn:
+        ui.panelPlayer.addPlayer(game.opponentName)
+        ui.panelPlayer.addPlayer(game.playerName)
+    else:
+        ui.panelPlayer.addPlayer(game.playerName)
+        ui.panelPlayer.addPlayer(game.opponentName)
+
+    ui.panelDrawBoard.setTextOverlayText(UI.CHOOSING_WORD)
 
     rounds = 2
 
     for _ in range(rounds * 2):
-        ui.panelGuess.disableGuessInput()
         if game.isTurn:
-            ui.panelDrawBoard.showChoosingWordOverlay(game.wordChoices)
+            while not game.wordChoices:
+                pass
+            ui.panelDrawBoard.showTextOverlay(game.wordChoices)
             run(chooseWordLoop, blitDrawBoard=False)
-            ui.panelDrawBoard.hideChoosingWordOverlay()
+            ui.panelDrawBoard.hideTextOverlay()
 
             ui.panelWord.setWord(game.word, isHost=True)
             ui.panelWord.startTimer(60)
 
+            game.start()
+
             run(drawLoop)
         else:
-            ui.panelDrawBoard.showChoosingWordOverlay()
+            ui.panelDrawBoard.showTextOverlay()
             run(waitWordLoop, blitDrawBoard=False)
-            ui.panelDrawBoard.hideChoosingWordOverlay()
+            ui.panelDrawBoard.hideTextOverlay()
 
             ui.panelGuess.enableGuessInput()
 
             ui.panelWord.setWord(game.word, isHost=False)
             ui.panelWord.startTimer(60)
+
+            game.start()
 
             run(guessLoop)
 

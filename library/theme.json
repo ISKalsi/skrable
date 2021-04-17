@@ -29,5 +29,33 @@
       "size": "25",
       "regular_path": "library/Roboto-Regular.ttf"
     }
+  },
+  "#playerLabel": {
+    "colours": {
+      "dark_bg": "#00000000"
+    }
+  },
+  "rank": {
+    "prototype": "#playerLabel",
+    "font": {
+      "name": "roboto-black",
+      "size": "30"
+    }
+  },
+  "name": {
+    "prototype": "#playerLabel",
+    "font": {
+      "name": "roboto-medium",
+      "size": "23",
+      "regular_path": "library/Roboto-Medium.ttf"
+    }
+  },
+  "score": {
+    "prototype": "#playerLabel",
+    "font": {
+      "name": "roboto-light",
+      "size": "14",
+      "regular_path": "library/Roboto-Light.ttf"
+    }
   }
 }
