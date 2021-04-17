@@ -1,4 +1,5 @@
 import socket
+import struct
 from threading import Thread
 import json
 from abc import abstractmethod
@@ -32,6 +33,29 @@ class Network:
     def address(self, new: tuple):
         self.host, self.port = new
 
+    @staticmethod
+    def __recvall(sock, count):
+        buf = b''
+        while count:
+            newBuf = sock.recv(count)
+            if not newBuf:
+                return None
+            buf += newBuf
+            count -= len(newBuf)
+        return buf
+
+    @staticmethod
+    def _recv_one_message(sock):
+        lengthBuf = Network.__recvall(sock, 4)
+        length, = struct.unpack('!I', lengthBuf)
+        return Network.__recvall(sock, length)
+
+    @staticmethod
+    def _send_one_message(sock, data):
+        length = len(data)
+        sock.sendall(struct.pack('!I', length))
+        sock.sendall(data)
+
 
 class Server(Network):
     def __init__(self):
@@ -60,7 +84,7 @@ class Server(Network):
         print("\n[NEW CONNECTION]", addr)
 
         while True:
-            data = conn.recv(self.header)
+            data = Network._recv_one_message(conn)
 
             try:
                 obj = json.loads(data.decode(self.format)) if data is not None else None
@@ -72,18 +96,18 @@ class Server(Network):
                 if msg is not None:
                     jsonObject = json.dumps(msg)
                     byteObject = jsonObject.encode(self.format)
-                    conn.sendall(byteObject)
+                    Network._send_one_message(conn, byteObject)
                 else:
                     msg = ""
                     jsonObject = json.dumps(msg)
                     byteObject = jsonObject.encode(self.format)
-                    conn.sendall(byteObject)
+                    Network._send_one_message(conn, byteObject)
             except KeyboardInterrupt:
                 print("Closing server...")
                 break
-            except Exception as e:
-                print(e)
-                break
+            # except Exception as e:
+            #     print(e)
+            #     break
 
         conn.close()
         self.clientN -= 1
@@ -91,7 +115,7 @@ class Server(Network):
 
     def _requestClient(self, conn):
         try:
-            data = conn.recv(self.header)
+            data = Network._recv_one_message(conn)
             msg = json.loads(data.decode(self.format))
 
             if msg == self.FAIL:
@@ -107,7 +131,7 @@ class Server(Network):
         try:
             jsonObject = json.dumps(msg)
             byteObject = jsonObject.encode(self.format)
-            conn.sendall(byteObject)
+            Network._send_one_message(conn, byteObject)
         except KeyboardInterrupt:
             print("\nDisconnecting...")
         # except Exception as e:
@@ -146,7 +170,7 @@ class Client(Thread, Network):
 
     def __requestServer(self):
         try:
-            data = self.sock.recv(self.header)
+            data = Network._recv_one_message(self.sock)
             msg = json.loads(data.decode(self.format))
 
             if msg == self.FAIL:
@@ -162,7 +186,7 @@ class Client(Thread, Network):
         try:
             jsonObject = json.dumps(self.__sendMsg)
             byteObject = jsonObject.encode(self.format)
-            self.sock.sendall(byteObject)
+            Network._send_one_message(self.sock, byteObject)
         except KeyboardInterrupt:
             print("\nDisconnecting...")
         # except Exception as e:
