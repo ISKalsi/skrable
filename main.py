@@ -1,6 +1,5 @@
 import pygame
 import pygame_gui as gui
-from threading import Lock
 from library.contants import Values, Colors
 from library.elements import DrawBoard, Game, Player
 from library.ui import StartGame, UI
@@ -15,7 +14,6 @@ pygame.display.set_caption("skrable")
 
 mainWindow = pygame.display.set_mode(UI.SIZE_MW)
 clock = pygame.time.Clock()
-lock = Lock()
 
 drawBoard = DrawBoard(
     window=pygame.surface.Surface(UI.SIZE_DB),
@@ -25,6 +23,8 @@ drawBoard = DrawBoard(
 
 ui = UI()
 game = Game(menu.playerName, menu.gameCode, menu.isHost, drawBoard)
+player = Player(game.playerName)
+opponent = Player(game.opponentName)
 
 
 def isQuit(event):
@@ -63,7 +63,7 @@ def chooseWordLoop():
             if event.user_type == gui.UI_BUTTON_PRESSED:
                 objID = event.ui_object_id.split(".")
 
-                if objID[0] == "panelOverlay":
+                if objID[0] == "textOverlay":
                     game.word = event.ui_element.text
                     return False
 
@@ -85,6 +85,17 @@ def waitWordLoop():
 
 
 def drawLoop():
+    with game.lock:
+        pg = game.pendingGuesses
+        isCorrect = False
+        for guess in pg:
+            if ui.addGuessAndCheckCorrect(guess, opponent):
+                isCorrect = True
+            pg.pop(0)
+
+        if isCorrect:
+            return False
+
     for event in pygame.event.get():
         isQuit(event)
 
@@ -114,28 +125,15 @@ def drawLoop():
 
         ui.manager.process_events(event)
 
-    with lock:
-        pg = game.pendingGuesses
-        for guess in pg:
-            ui.panelGuess.addGuess(guess)
-            pg.pop(0)
+    if ui.panelWord.isTimeUp():
+        game.setRoundInactive()
+        return False
 
     return True
 
 
 def guessLoop():
-    for event in pygame.event.get():
-        isQuit(event)
-
-        if event.type == pygame.USEREVENT:
-            if event.user_type == gui.UI_TEXT_ENTRY_FINISHED:
-                if event.ui_object_id == "guessPanel.guessInput" and event.text:
-                    game.addToPendingGuesses(event.text)
-                    ui.panelGuess.addGuess(event.text)
-
-        ui.manager.process_events(event)
-
-    with lock:
+    with game.lock:
         pc = game.pendingCoordinates
         if len(pc) > 1:
             for i in range(len(pc)-1):
@@ -144,6 +142,23 @@ def guessLoop():
 
         if pc and not drawBoard.isDrawing:
             pc.clear()
+
+    for event in pygame.event.get():
+        isQuit(event)
+
+        if event.type == pygame.USEREVENT:
+            if event.user_type == gui.UI_TEXT_ENTRY_FINISHED:
+                if event.ui_object_id == "guessPanel.guessInput" and event.text:
+                    guess = event.text.strip().lower()
+                    game.addToPendingGuesses(guess)
+                    if ui.addGuessAndCheckCorrect(guess, player):
+                        return False
+
+        ui.manager.process_events(event)
+
+    if ui.panelWord.isTimeUp():
+        game.setRoundInactive()
+        return False
 
     return True
 
@@ -157,42 +172,49 @@ def run(loop, blitDrawBoard=True):
 
 
 if __name__ == '__main__':
-    player = Player(menu.playerName)
-    proceededToSetup = game.newGame()
+    proceededToSetup = game.newGame(rounds=2, timePerRound=10) if game.isTurn else game.newGame()
 
     if not proceededToSetup:
         exit()
 
     ui.panelGuess.disableGuessInput()
 
-    ui.panelDrawBoard.setTextOverlayText(UI.WAITING_FOR_PLAYER)
+    ui.panelDrawBoard.setOneLinerText(UI.WAITING_FOR_PLAYER)
     ui.panelDrawBoard.showTextOverlay()
     run(waitForPlayerLoop, blitDrawBoard=False)
     ui.panelDrawBoard.hideTextOverlay()
 
+    opponent.name = game.opponentName
+
     if not game.isTurn:
-        ui.panelPlayer.addPlayer(game.opponentName)
-        ui.panelPlayer.addPlayer(game.playerName)
+        ui.panelPlayer.addPlayer(opponent)
+        ui.panelPlayer.addPlayer(player)
+        game.addPlayers(opponent, player)
     else:
-        ui.panelPlayer.addPlayer(game.playerName)
-        ui.panelPlayer.addPlayer(game.opponentName)
+        ui.panelPlayer.addPlayer(player)
+        ui.panelPlayer.addPlayer(opponent)
+        game.addPlayers(player, opponent)
 
-    ui.panelDrawBoard.setTextOverlayText(UI.CHOOSING_WORD)
+    ui.panelPlayer.showRoundLabel()
+    ui.panelDrawBoard.setOneLinerText(UI.CHOOSING_WORD)
 
-    rounds = 2
+    for _ in range(game.rounds * 2):
+        game.setRoundActive()
+        ui.panelGuess.disableGuessInput()
 
-    for _ in range(rounds * 2):
         if game.isTurn:
             while not game.wordChoices:
                 pass
+
             ui.panelDrawBoard.showTextOverlay(game.wordChoices)
             run(chooseWordLoop, blitDrawBoard=False)
             ui.panelDrawBoard.hideTextOverlay()
 
             ui.panelWord.setWord(game.word, isHost=True)
-            ui.panelWord.startTimer(60)
+            ui.panelWord.startTimer(game.roundTime)
 
-            game.start()
+            if not game.is_alive():
+                game.start()
 
             run(drawLoop)
         else:
@@ -203,10 +225,18 @@ if __name__ == '__main__':
             ui.panelGuess.enableGuessInput()
 
             ui.panelWord.setWord(game.word, isHost=False)
-            ui.panelWord.startTimer(60)
+            ui.panelWord.startTimer(game.roundTime)
 
-            game.start()
+            if not game.is_alive():
+                game.start()
 
             run(guessLoop)
 
-        game.isTurn = not game.isTurn
+        drawBoard.clearBoard()
+        game.calculateScore(*[int(time) for time in ui.panelWord.currentTime.split(':')])
+        ui.endRound()
+
+        while game.isRoundActive:
+            pass
+
+    print("Game finished. Thanks for playing!")

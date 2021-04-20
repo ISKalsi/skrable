@@ -6,7 +6,7 @@
   },
   "overlay": {
     "colours": {
-      "dark_bg": "#00000000"
+      "dark_bg": "#00000055"
     }
   },
   "#wordPanel": {
@@ -56,6 +56,28 @@
       "name": "roboto-light",
       "size": "14",
       "regular_path": "library/Roboto-Light.ttf"
+    }
+  },
+  "roundLabel": {
+    "prototype": "#playerLabel",
+    "font": {
+      "name": "roboto-black",
+      "size": "30"
+    }
+  },
+  "roundPanel": {
+    "misc": {
+      "border_width": "0",
+      "shadow_width": "0"
+    }
+  },
+  "scoreboard": {
+    "font": {
+      "name": "roboto-regular",
+      "size": "35"
+    },
+    "colours":{
+      "dark_bg": "#33445500"
     }
   }
 }

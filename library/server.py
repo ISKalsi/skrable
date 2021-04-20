@@ -16,29 +16,40 @@ class SkrableServer(Server):
 
         try:
             game = self.games[data["code"]]
-            if "lock" not in game.keys():
-                game["lock"] = Lock()
-
             game["lock"].acquire()
 
             if data["exitCode"] != self.SUCCESS:
                 if data["exitCode"] == self.EXIT:
                     game["gameActive"] = False
-                    return self.SUCCESS
+                    processedData = self.SUCCESS
                 else:
-                    return self.FAIL
-
-            if not game["gameActive"]:
-                return self.EXIT
-
-            if data["type"] == "host":
+                    processedData = self.FAIL
+            elif not game["gameActive"]:
+                processedData = self.EXIT
+            elif "playerJoined" in game and not data["word"]:
+                game["lock"].release()
+                if data["type"] == "host":
+                    self.hostSelectWord(game, conn)
+                else:
+                    game["roundActive"] = True
+                    self.joinSelectWord(game, conn)
+                processedData = self.ABORT
+            elif data["type"] == "host":
+                game["roundActive"] = data["roundActive"] if game["roundActive"] else game["roundActive"]
                 game["pendingCoordinates"].extend(data["pendingCoordinates"])
                 game["isDrawing"] = True if data["pendingCoordinates"] else data["isDrawing"]
-                processedData = tuple(game["pendingGuesses"])
+                processedData = game["isGuessed"], game["roundActive"], tuple(game["pendingGuesses"])
+                if game["isGuessed"]:
+                    game["isGuessed"] = False
                 game["pendingGuesses"].clear()
             elif game["playerJoined"]:
+                game["roundActive"] = data["roundActive"] if game["roundActive"] else game["roundActive"]
                 game["pendingGuesses"].extend(data["pendingGuesses"])
-                processedData = game["isDrawing"], tuple(game["pendingCoordinates"])
+                if data["isGuessed"]:
+                    game["isGuessed"] = True
+                    game["word"] = ""
+                    game["roundActive"] = False
+                processedData = game["isDrawing"], game["roundActive"], tuple(game["pendingCoordinates"])
                 game["pendingCoordinates"].clear()
             else:
                 raise Exception(f"Could not process data, [{data}]")
@@ -46,42 +57,41 @@ class SkrableServer(Server):
             game["lock"].release() if game["lock"].locked() else ...
             return processedData
         except KeyError as e:
-            if e.args[0] == data["code"]:
-                if data["type"] == "host":
-                    print(f"Creating New Game... ({data['code']})")
+            if e.args[0] == data["code"] and data["type"] == "host":
+                print(f"Creating New Game... ({data['code']})")
 
-                    game = self.games[data["code"]] = {
-                        "hostName": data["name"],
-                        "joinName": "",
-                        "pendingCoordinates": [],
-                        "pendingGuesses": [],
-                        "word": "",
-                        "isDrawing": False,
-                        "gameActive": True
-                    }
+                game = self.games[data["code"]] = {
+                    "hostName": data["name"],
+                    "joinName": "",
+                    "pendingCoordinates": [],
+                    "pendingGuesses": [],
+                    "word": "",
+                    "rounds": data["rounds"],
+                    "roundTime": data["roundTime"],
+                    "isDrawing": False,
+                    "isGuessed": False,
+                    "roundActive": True,
+                    "gameActive": True,
+                    "lock": Lock(),
+                }
 
-                    self.newPlayer(game, "host", conn)
-                    return self.ABORT
-                else:
-                    print(e, data)
-                    return self.FAIL
-            elif e.args[0] == "playerJoined":
-                if data["type"] == "join":
-                    print(f"Joined game... ({data['code']})")
-                    game = self.games[data["code"]]
-                    game["joinName"] = data["name"]
-                    game["playerJoined"] = True
+                self.newPlayer(game, "host", conn)
+                return self.ABORT
+            elif e.args[0] == "playerJoined" and data["type"] == "join":
+                print(f"Joined game... ({data['code']})")
+                game = self.games[data["code"]]
+                game["joinName"] = data["name"]
+                game["playerJoined"] = True
 
-                    game["lock"].release()
+                game["lock"].release()
 
-                    self.newPlayer(game, "join", conn)
-                    return self.ABORT
-                else:
-                    print(e, data)
-                    return self.FAIL
+                self.newPlayer(game, "join", conn)
+                return self.ABORT
 
             # TODO - handle error codes
-            raise e
+            print("games:", self.games)
+            print("data:", data)
+            return self.FAIL
 
     def newPlayer(self, game, playerType, conn: socket.socket):
         self._sendToClient(conn, self.SUCCESS)
@@ -91,7 +101,7 @@ class SkrableServer(Server):
             self._sendToClient(conn, game["joinName"])
             self.hostSelectWord(game, conn)
         else:
-            self._sendToClient(conn, game["hostName"])
+            self._sendToClient(conn, (game["hostName"], game["rounds"], game["roundTime"]))
             self.joinSelectWord(game, conn)
 
     def hostSelectWord(self, game, conn: socket.socket):

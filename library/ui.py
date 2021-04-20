@@ -4,6 +4,7 @@ from pygame_gui.core import ObjectID as OID
 import pygame_gui.elements as guiElements
 from pygame.rect import Rect
 from library.contants import Values
+from library.elements import Player
 from threading import Thread
 import clipboard
 import random
@@ -11,9 +12,12 @@ import string
 import time
 
 
-def fitRectToLabel(label: guiElements.UILabel):
-    print(label.font.size(label.text))
-    label.set_dimensions(label.font.size(label.text))
+def fitRectToLabel(label: guiElements.UILabel, fitToWidth=True, fitToHeight=True):
+    width, height = label.font.size(label.text)
+    label.set_dimensions(
+        (width if fitToWidth else label.relative_rect.w,
+         height if fitToHeight else label.relative_rect.h)
+    )
 
 
 class StartGame:
@@ -190,10 +194,12 @@ class GuessPanel:
 
         self.guessBox.scroll_bar_width = 3
 
-    def addGuess(self, guess):
+    def addGuess(self, player, guess=None):
         self.guessInput.set_text("")
 
-        self.guessBox.html_text += "<br>" + guess
+        text = (player.name + ": " + guess) if guess else f"<font color='#00BB00'>{player.name} guessed the word</font>"
+        self.guessBox.html_text += "<br>" + text
+
         self.guessBox.rebuild()
 
     def disableGuessInput(self):
@@ -226,6 +232,8 @@ class WordPanel:
 
         rect = Rect(0, 0, width / 3, height)
         rect.center = width / 2, height / 2
+
+        self.__word = ""
         self.word = guiElements.UILabel(
             text="",
             object_id="wordLabel",
@@ -245,39 +253,47 @@ class WordPanel:
         )
 
         self.timer.hide()
+        self.__isRunning = False
 
     def __countdown(self, timeInSec):
-        while timeInSec:
+        while timeInSec and self.__isRunning:
             mins, secs = divmod(timeInSec, 60)
             timer = '{:1d}:{:02d}'.format(mins, secs)
             self.currentTime = timer
             time.sleep(1)
             timeInSec -= 1
 
+        self.timer.hide()
         self.currentTime = "0:00"
 
     def setWord(self, word, isHost):
+        self.__word = word.lower().strip()
         if isHost:
-            self.word.set_text(word.upper())
+            self.word.set_text(word.upper().strip())
         else:
             word = ["_" if ch != " " else " " for ch in word]
             self.word.set_text(" ".join(word))
 
     def getWord(self):
-        return self.word.text
+        return self.__word
 
     def isTimeUp(self):
         return self.currentTime == "0:00"
 
     def updateTimer(self):
-        if not self.isTimeUp():
-            self.timer.set_text(self.currentTime)
-        else:
-            self.timer.hide()
+        self.timer.set_text(self.currentTime)
 
     def startTimer(self, t):
+        self.__isRunning = True
         self.timer.show()
         Thread(name="Timer", target=self.__countdown, args=(t,), daemon=True).start()
+
+    def stopTimer(self):
+        self.__isRunning = False
+
+    def clearWord(self):
+        self.__word = ""
+        self.word.set_text("")
 
 
 class PenPanel:
@@ -334,29 +350,66 @@ class DrawBoardPanel:
             }
         )
 
-        self.panelOverlay = guiElements.UIPanel(
-            object_id="panelOverlay",
+        self.textOverlay = guiElements.UIPanel(
+            object_id=OID("textOverlay", "panelOverlay"),
             relative_rect=Rect((x + UI.PADDING, y + UI.PADDING), UI.SIZE_DB),
             manager=uiManager,
-            starting_layer_height=4,
+            starting_layer_height=2,
+            visible=False
         )
 
-        self.textWord = guiElements.UILabel(
+        sb = self.scoreBoardOverlay = guiElements.UIPanel(
+            object_id=OID("scoreBoardOverlay", "panelOverlay"),
+            relative_rect=Rect((x + UI.PADDING, y + UI.PADDING), UI.SIZE_DB),
+            manager=uiManager,
+            starting_layer_height=3,
+            visible=False
+        )
+
+        self.textOneLiner = guiElements.UILabel(
             object_id="overlay",
             text=UI.CHOOSING_WORD,
             relative_rect=Rect((0, 0), UI.SIZE_DB),
             manager=uiManager,
-            container=self.panelOverlay,
+            container=self.textOverlay,
+        )
+
+        rect = Rect(0, 0, sb.panel_container.rect.w, sb.panel_container.rect.h * 0.6)
+        self.textTheWordWas = guiElements.UILabel(
+            object_id=OID("theWordWas", "scoreboard"),
+            text="The word was: ",
+            relative_rect=rect,
+            manager=uiManager,
+            container=self.scoreBoardOverlay
+        )
+
+        rect.y += 10
+        self.hostScore = guiElements.UILabel(
+            object_id=OID("hostScore", "scoreboard"),
+            text="",
+            relative_rect=rect,
+            manager=uiManager,
+            container=self.scoreBoardOverlay
+        )
+
+        rect.y += 10
+        self.joinScore = guiElements.UILabel(
+            object_id=OID("joinScore", "scoreboard"),
+            text="",
+            relative_rect=rect,
+            manager=uiManager,
+            container=self.scoreBoardOverlay
         )
 
         self.words = []
 
-        dy = UI.SIZE_BTN[1] * 3 / 2 + UI.MARGIN
+        wordsN = 3
+        dy = UI.SIZE_BTN[1] * wordsN / 2 + UI.MARGIN
 
         x = UI.SIZE_DB[0] / 2
         y = UI.SIZE_DB[1] / 2 - dy
 
-        for i in range(3):
+        for i in range(wordsN):
             rect_btn = Rect((0, 0), UI.SIZE_BTN)
             rect_btn.center = x, y + i * dy
 
@@ -365,7 +418,7 @@ class DrawBoardPanel:
                 relative_rect=rect_btn,
                 text="",
                 manager=uiManager,
-                container=self.panelOverlay,
+                container=self.textOverlay,
                 visible=False
             )
             self.words.append(btn)
@@ -374,17 +427,17 @@ class DrawBoardPanel:
         if isDrawing:
             for button in self.words:
                 button.show()
-            self.textWord.hide()
+            self.textOneLiner.hide()
         else:
             for button in self.words:
                 button.hide()
-            self.textWord.show()
+            self.textOneLiner.show()
 
-    def setTextOverlayText(self, text):
-        self.textWord.set_text(text)
+    def setOneLinerText(self, text):
+        self.textOneLiner.set_text(text)
 
     def showTextOverlay(self, words=None):
-        self.panelOverlay.show()
+        self.textOverlay.show()
 
         if words:
             for button, word in zip(self.words, words):
@@ -394,15 +447,17 @@ class DrawBoardPanel:
             self.__toggleVisibility(isDrawing=False)
 
     def hideTextOverlay(self):
-        self.panelOverlay.hide()
+        self.textOverlay.hide()
 
 
 class PlayerPanel:
     CARD_HEIGHT = 60
-    PLAYER_COUNT = 0
     RANK_WIDTH = 55
 
     def __init__(self, uiManager):
+        self.PLAYER_COUNT = 0
+        self.TURN_COUNT = 0
+
         size = Values.SIZE_MAIN_WINDOW
         ratio = (1 - Values.RATIO_DB_TO_MW[0]) / 2
 
@@ -427,18 +482,51 @@ class PlayerPanel:
             }
         )
 
-        self.players = []
-
-    def addPlayer(self, name, score=0, rank=1):
-        num = PlayerPanel.PLAYER_COUNT
         cardH = PlayerPanel.CARD_HEIGHT
+        cardW = self.panel.rect.w - 2 * UI.PADDING
+        roundPanel = guiElements.UIPanel(
+            object_id=OID("roundPanel", "player"),
+            relative_rect=Rect((0, 0), (cardW, cardH)),
+            manager=uiManager,
+            container=self.panel,
+            starting_layer_height=1,
+            margins={
+                "left": UI.PADDING,
+                "top": 0,
+                "right": UI.PADDING,
+                "bottom": UI.PADDING
+            }
+        )
+
+        rect = Rect(0, 0, 200, roundPanel.panel_container.rect.h)
+        self.round = guiElements.UILabel(
+            object_id=OID("roundLabel", "round"),
+            text="Round 1",
+            relative_rect=rect,
+            manager=self.panel.ui_manager,
+            container=roundPanel,
+            anchors={
+                "left": "left",
+                "right": "left",
+                "top": "top",
+                "bottom": "bottom"
+            }
+        )
+        fitRectToLabel(self.round, fitToHeight=False)
+        self.round.hide()
+
+        self.players = {}
+
+    def addPlayer(self, player: Player):
+        num = self.PLAYER_COUNT + 1
         rankW = PlayerPanel.RANK_WIDTH
 
+        cardH = PlayerPanel.CARD_HEIGHT
         cardY = (cardH + UI.MARGIN) * num
         cardW = self.panel.rect.w - 2 * UI.PADDING
 
         rect = Rect((0, cardY), (cardW, cardH))
-        player = guiElements.UIPanel(
+        panel = guiElements.UIPanel(
             object_id=OID(f"player{num}", "player"),
             relative_rect=rect,
             manager=self.panel.ui_manager,
@@ -446,13 +534,13 @@ class PlayerPanel:
             starting_layer_height=1
         )
 
-        rect = Rect(0, 0, rankW, player.panel_container.rect.h)
+        rect = Rect(0, 0, rankW, panel.panel_container.rect.h)
         rankLabel = guiElements.UILabel(
             object_id=OID(f"rank{num}", "rank"),
-            text=f"#{rank}",
+            text=f"#{player.rank}",
             relative_rect=rect,
             manager=self.panel.ui_manager,
-            container=player,
+            container=panel,
             anchors={
                 "left": "left",
                 "right": "left",
@@ -461,16 +549,16 @@ class PlayerPanel:
             }
         )
 
-        nameW = player.rect.w - 2 * rankW
-        nameH = player.panel_container.rect.h * 0.65
+        nameW = panel.rect.w - 2 * rankW
+        nameH = panel.panel_container.rect.h * 0.65
 
         rect = Rect(rankW, 0, nameW, nameH)
         nameLabel = guiElements.UILabel(
             object_id=OID(f"name{num}", "name"),
-            text=name.strip(),
+            text=player.name.strip(),
             relative_rect=rect,
             manager=self.panel.ui_manager,
-            container=player,
+            container=panel,
             anchors={
                 "left": "left",
                 "right": "right",
@@ -479,13 +567,13 @@ class PlayerPanel:
             }
         )
 
-        rect.bottomleft = (rankW, player.panel_container.rect.h + 6)
+        rect.bottomleft = (rankW, panel.panel_container.rect.h + 6)
         scoreLabel = guiElements.UILabel(
             object_id=OID(f"score{num}", "score"),
-            text=f"score: {score}",
+            text=f"score: {player.score}",
             relative_rect=rect,
             manager=self.panel.ui_manager,
-            container=player,
+            container=panel,
             anchors={
                 "left": "left",
                 "right": "right",
@@ -494,8 +582,25 @@ class PlayerPanel:
             }
         )
 
-        PlayerPanel.PLAYER_COUNT += 1
-        self.players.append((nameLabel, scoreLabel, rankLabel, player))
+        self.PLAYER_COUNT += 1
+        p = self.players[f"player{self.PLAYER_COUNT}"] = {}
+        p["name"] = nameLabel
+        p["score"] = scoreLabel
+        p["rank"] = rankLabel
+        p["panel"] = panel
+        p["object"] = player
+
+    def updatePlayers(self):
+        for _, player in self.players.items():
+            player["score"].set_text(f"score: {player['object'].score}")
+            player["rank"].set_text(f"#{player['object'].rank}")
+
+    def updateRound(self):
+        self.TURN_COUNT += 1
+        self.round.set_text(f"Round {self.TURN_COUNT // self.PLAYER_COUNT + 1}")
+
+    def showRoundLabel(self):
+        self.round.show()
 
 
 class UI:
@@ -519,8 +624,18 @@ class UI:
         self.panelPen = PenPanel(self.manager)
         self.panelWord = WordPanel(self.manager)
 
-    def addGuess(self, *guesses):
+    def addGuessAndCheckCorrect(self, guess, player):
         word = self.panelWord.getWord()
-        for guess in guesses:
-            if guess == word:
-                pass
+
+        if guess == word:
+            self.panelGuess.addGuess(player)
+            return True
+        else:
+            self.panelGuess.addGuess(player, guess)
+            return False
+
+    def endRound(self):
+        self.panelPlayer.updatePlayers()
+        self.panelPlayer.updateRound()
+        self.panelWord.stopTimer()
+        self.panelWord.clearWord()

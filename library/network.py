@@ -1,7 +1,8 @@
 import socket
 import struct
-from threading import Thread
+from threading import Thread, Lock
 import json
+import traceback
 from abc import abstractmethod
 
 
@@ -22,6 +23,7 @@ class Network:
         self.port = 8420
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.lock = Lock()
 
         self.__exitCode = self.DISCONNECT
 
@@ -62,7 +64,9 @@ class Server(Network):
         super(Server, self).__init__()
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(self.address)
+
         self.clientN = 0
+        self.clientLocks = {}
 
     @abstractmethod
     def processData(self, data, conn, addr):
@@ -84,10 +88,19 @@ class Server(Network):
         print("\n[NEW CONNECTION]", addr)
 
         while True:
-            data = Network._recv_one_message(conn)
+            byteData = None
+            data = None
+            # obj = None
+            # msg = None
+            # raised = True
 
+            # noinspection PyBroadException
             try:
-                obj = json.loads(data.decode(self.format)) if data is not None else None
+                with self.clientLocks[addr]:
+                    byteData = Network._recv_one_message(conn)
+                data = byteData.decode(self.format)
+
+                obj = json.loads(data) if data is not None else None
                 msg = self.processData(obj, conn, addr)
 
                 if msg == self.ABORT:
@@ -96,27 +109,46 @@ class Server(Network):
                 if msg is not None:
                     jsonObject = json.dumps(msg)
                     byteObject = jsonObject.encode(self.format)
-                    Network._send_one_message(conn, byteObject)
+                    with self.clientLocks[addr]:
+                        Network._send_one_message(conn, byteObject)
                 else:
                     msg = ""
                     jsonObject = json.dumps(msg)
                     byteObject = jsonObject.encode(self.format)
-                    Network._send_one_message(conn, byteObject)
+                    with self.clientLocks[addr]:
+                        Network._send_one_message(conn, byteObject)
+                # raised = False
             except KeyboardInterrupt:
                 print("Closing server...")
                 break
-            # except Exception as e:
-            #     print(e)
-            #     break
+            except json.JSONDecodeError:
+                print("\n")
+                print("byteData:", byteData)
+                print("data:", data)
+
+                print("error:", traceback.print_exc())
+                break
+            # except Exception:
+            #     print("\n")
+            #     print("obj:", obj)
+            #     print("msg:", msg)
+            #     print("error:", traceback.print_exc(-1))
+            # finally:
+            #     if raised:
+            #         break
 
         conn.close()
         self.clientN -= 1
         print("[CONNECTION CLOSED]", addr, end='\n\n')
 
     def _requestClient(self, conn):
+        byteData = None
+        data = None
+
         try:
-            data = Network._recv_one_message(conn)
-            msg = json.loads(data.decode(self.format))
+            byteData = Network._recv_one_message(conn)
+            data = byteData.decode(self.format)
+            msg = json.loads(data)
 
             if msg == self.FAIL:
                 raise Exception("Failure triggered from server")
@@ -124,6 +156,17 @@ class Server(Network):
             return msg
         except KeyboardInterrupt:
             print("\nDisconnecting...")
+        except UnicodeDecodeError:
+            print("\n")
+            print("byteData:", byteData)
+
+            print("error:", traceback.print_exc())
+        except json.JSONDecodeError:
+            print("\n")
+            print("byteData:", byteData)
+            print("data:", data)
+
+            print("error:", traceback.print_exc())
         # except Exception as e:
         #     print(e)
 
@@ -145,6 +188,7 @@ class Server(Network):
             while True:
                 conn, addr = self.sock.accept()
                 self.clientN += 1
+                self.clientLocks[addr] = Lock()
 
                 Thread(
                     name=f"[{conn}, {addr}]",
