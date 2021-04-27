@@ -1,5 +1,6 @@
 import pygame
 import time
+import threading
 from library.network import Client
 from library.contants import Colors, Values
 from threading import Thread
@@ -7,10 +8,20 @@ from threading import Thread
 
 # TODO - disconnect/exit implementation
 class Player:
-    def __init__(self, name, score=0, rank=1):
+    COUNT = 0
+
+    def __init__(self, name):
+        self.ID = Player.COUNT
         self.name = name
-        self.score = score
-        self.rank = rank
+        self.score = 0
+        self.rank = 1
+        self.isTurn = Player.COUNT == 0
+        self.hasGuessed = False
+
+        Player.COUNT += 1
+
+    def __lt__(self, other):
+        return self.score < other.score
 
 
 class Pen:
@@ -63,36 +74,45 @@ class Game(Client):
         self.drawBoard = drawBoard
         self.__game = {
             "name": name,
-            "opponent": "",
+            "id": 0,
             "code": code,
             "type": "host" if isHost else "join",
             "word": "",
             "rounds": 0,
             "roundTime": 0,
             "roundActive": False,
+            "gameStarted": False,
             "pendingCoordinates": [],
             "pendingGuesses": [],
             "isDrawing": False,
-            "isGuessed": False,
             "exitCode": self.SUCCESS
         }
 
         self.__isTurn = isHost
         self.__wordChoices = []
         self.guesses = []
-        self.players = []
+        self.allGuesses = []
+        self.players = [Player(name)] if isHost else []
         self.wordChosen = False
+        self.notGuessedCounter = 0
+        self.drawerID = 0
 
         self.__isRunning = True
         self.__setRoundInactiveCalled = False
+        self.__mainThreadResponded = False
+        self.__clientThreadResponded = False
 
     @property
     def playerName(self):
         return self.__game["name"]
 
     @property
-    def opponentName(self):
-        return self.__game["opponent"]
+    def playerID(self):
+        return self.__game["id"]
+
+    @playerID.setter
+    def playerID(self, new):
+        self.__game["id"] = new
 
     @property
     def wordChoices(self):
@@ -104,6 +124,7 @@ class Game(Client):
 
     @word.setter
     def word(self, new):
+        print(new)
         self.wordChosen = True if new else False
         self.__game["word"] = new.strip().lower()
 
@@ -116,16 +137,21 @@ class Game(Client):
         self.__game["isDrawing"] = new
 
     @property
-    def isGuessed(self):
-        return self.__game["isGuessed"]
-
-    @property
     def gameCode(self):
         return self.__game['code']
 
     @gameCode.setter
     def gameCode(self, new):
         self.__game['code'] = new
+
+    @property
+    def isStarted(self):
+        return self.__game["gameStarted"]
+
+    def startGame(self):
+        self._sendMsg(self.START)
+        print("start signal sent")
+        self.__game["gameStarted"] = True
 
     @property
     def isTurn(self):
@@ -148,15 +174,29 @@ class Game(Client):
     def isRoundActive(self):
         return self.__game["roundActive"]
 
-    def setRoundInactive(self):
-        if not self.__setRoundInactiveCalled:
-            self.__setRoundInactiveCalled = True
-            self.__prepForNextRound()
-            self.__game["roundActive"] = False
+    def nextRound(self):
+        name = threading.currentThread().getName()
+        if name == "ClientThread":
+            self.__clientThreadResponded = True
+        elif name == "MainThread":
+            self.__mainThreadResponded = True
 
     def setRoundActive(self):
+        while not self.__mainThreadResponded or not self.__clientThreadResponded:
+            pass
+
         self.__game["roundActive"] = True
         self.__setRoundInactiveCalled = False
+        self.__mainThreadResponded = False
+        self.__clientThreadResponded = False
+
+    def setRoundInactive(self, isTimeUp=False):
+        if not self.__setRoundInactiveCalled:
+            self.__game["roundActive"] = False
+            self.__setRoundInactiveCalled = True
+            if isTimeUp:
+                self._sendMsg(self.__game)
+            self.__prepForNextRound()
 
     @property
     def playerType(self):
@@ -168,94 +208,111 @@ class Game(Client):
 
     @property
     def pendingGuesses(self):
-        return self.__game["pendingGuesses"]
+        return self.guesses
 
     def addToPendingGuesses(self, guess):
-        self.guesses.append(guess)
         self.__game["pendingGuesses"].append(guess)
-        self.__game["isGuessed"] = guess == self.word
 
     def addToPendingCoordinates(self, coordinate):
         if not self.__game["pendingCoordinates"]:
             self.__game["pendingCoordinates"].append(self.drawBoard.last_position)
         self.__game["pendingCoordinates"].append(coordinate)
 
+    def __turnChange(self):
+        self.players[self.drawerID].isTurn = False
+
+        N = len(self.players)
+        ID = self.drawerID = (self.drawerID + 1) % N
+        self.players[ID].isTurn = True
+
+        self.isTurn = ID == self.playerID
+
     def __resetRound(self):
-        while self.__game["pendingGuesses"] or self.__game["pendingCoordinates"]:
+        while self.pendingGuesses or self.pendingCoordinates:
             pass
 
         self.word = ""
+        self.notGuessedCounter = len(self.players) - 1
+        self.wordChosen = False
         self.__wordChoices.clear()
-        self.__game["isGuessed"] = False
         self.__game["isDrawing"] = False
         self.__game["exitCode"] = self.SUCCESS
-        self.pendingCoordinates.clear()
-        self.pendingGuesses.clear()
+        for player in self.players:
+            player.hasGuessed = False
+
+    def __sendUpdatedGame(self):
+        self._sendMsg(self.__game)
 
     def __prepForNextRound(self):
-        self.isTurn = not self.isTurn
+        self.__turnChange()
         self.__resetRound()
-        self._sendMsg(self.__game)
+        self.__sendUpdatedGame()
         print("Round finished.")
 
-    def __sendDrawBoard(self):
-        while True:
-            # todo handle time finish condition correctly
-            if self.__setRoundInactiveCalled:
-                break
+    def __isRoundActiveOnServer(self, roundActive):
+        if not roundActive:
+            while self.guesses:
+                pass
 
-            self._sendMsg(self.__game)
-            self.__game["pendingCoordinates"].clear()
+            self.setRoundInactive()
+            return False
+        return True
 
-            msg = self._receiveMsg()
+    def sendDrawBoard(self):
+        while not self.__setRoundInactiveCalled:
+            with self.lock:
+                if self.__setRoundInactiveCalled:
+                    break
+
+                self._sendMsg(self.__game)
+                self.__game["pendingCoordinates"].clear()
+                msg = self._receiveMsg()
 
             if msg:
                 if msg == self.EXIT:
                     break
 
-                isGuessed, roundActive, newGuesses = msg
-                self.__game["isGuessed"] = isGuessed
+                roundActive, newGuesses = msg
                 self.guesses.extend(newGuesses)
-                self.__game["pendingGuesses"].extend(newGuesses)
+                self.allGuesses.extend(newGuesses)
 
-                if not roundActive or isGuessed:
-                    self.setRoundInactive()
+                if not self.__isRoundActiveOnServer(roundActive):
                     break
 
             time.sleep(self.interval)
 
-    def __receiveDrawBoard(self):
-        while True:
-            self._sendMsg(self.__game)
-            self.__game["pendingGuesses"].clear()
+    def receiveDrawBoard(self):
+        while not self.__setRoundInactiveCalled:
+            with self.lock:
+                if self.__setRoundInactiveCalled:
+                    break
 
-            msg = self._receiveMsg()
-
-            # todo handle time finish condition correctly
-            if self.__setRoundInactiveCalled:
-                break
+                self._sendMsg(self.__game)
+                self.__game["pendingGuesses"].clear()
+                msg = self._receiveMsg()
 
             if msg:
                 if msg == self.EXIT:
                     print("Exiting...")
                     break
 
-                isDrawing, roundActive, pendingCoordinates = msg
-                if not roundActive:
-                    self.setRoundInactive()
-                    break
-
+                isDrawing, roundActive, pendingCoordinates, newGuesses = msg
                 self.__game["pendingCoordinates"].extend(pendingCoordinates)
-                self.drawBoard.isDrawing = self.isDrawing
+                if newGuesses:
+                    self.guesses.extend(newGuesses)
+                    self.allGuesses.extend(newGuesses)
+                self.drawBoard.isTurn = self.isDrawing
+
+                if not self.__isRoundActiveOnServer(roundActive):
+                    break
 
             time.sleep(self.interval)
 
-    def __receiveWord(self):
+    def receiveWord(self):
         print("waiting for word")
         self.word = self._receiveMsg()
-        print(self.word)
 
-    def __sendWord(self):
+    def sendWord(self):
         wc = self.__wordChoices = self._receiveMsg()
         print("received:", wc)
 
@@ -267,40 +324,54 @@ class Game(Client):
         print("sent")
 
     def run(self):
-        self.__sendDrawBoard() if self.isTurn else self.__receiveDrawBoard()
-        print("Round InActive")
+        self.notGuessedCounter = len(self.players) - 1
+        self.sendDrawBoard() if self.isTurn else self.receiveDrawBoard()
+        print("Round InActive\n")
 
         while self.__isRunning:
-            while not self.isRoundActive:
-                pass
+            self.nextRound()
+            self.setRoundActive()
 
             if self.isTurn:
-                self.__sendWord()
-                self.__sendDrawBoard()
+                self.sendWord()
+                self.sendDrawBoard()
             else:
-                self.__receiveWord()
-                self.__receiveDrawBoard()
+                self.receiveWord()
+                self.receiveDrawBoard()
 
-            print("Round InActive")
+            print("Round InActive\n")
 
     def __setupGame(self):
         if self.isTurn:
+            name = self._receiveMsg()
+            while name != self.START:
+                if name:
+                    self.players.append(Player(name))
+                name = self._receiveMsg()
+
+            self.__game["roundActive"] = True
+            self.sendWord()
+        else:
             msg = self._receiveMsg()
             if msg:
-                joinName = msg
-                self.__game["opponent"] = joinName
-            else:
-                print("error setting up host")
-            self.__sendWord()
-        else:
-            hostName, rounds, roundTime = self._receiveMsg()
-            if hostName:
+                name, rounds, roundTime = msg
                 self.__game["rounds"] = rounds
                 self.__game["roundTime"] = roundTime
-                self.__game["opponent"] = hostName
+                self.players.extend([Player(name) for name in name])
+
+                self.playerID = len(self.players)-1
+
+                name = self._receiveMsg()
+                while name != self.START:
+                    if name:
+                        self.players.append(Player(name))
+                    name = self._receiveMsg()
+
+                self.__game["gameStarted"] = True
+                self.__game["roundActive"] = True
+                self.receiveWord()
             else:
                 print("error setting up join")
-            self.__receiveWord()
 
     def newGame(self, rounds=None, timePerRound=None):
         self._establishConnection()
@@ -332,25 +403,20 @@ class Game(Client):
 
         return False
 
-    def addPlayers(self, *players: Player):
-        self.players.extend(players)
-
     def calculateScore(self, minLeft, secLeft):
         totalSecLeft = minLeft * 60 + secLeft
         timeTaken = self.roundTime - totalSecLeft
+        playerGuessedCount = [player.hasGuessed for player in self.players].count(True)
 
-        score1 = totalSecLeft * 13
-        score2 = timeTaken * 11
+        for player in self.players:
+            if player.hasGuessed:
+                raise NotImplementedError
+            elif player.isTurn:
+                raise NotImplementedError
 
-        self.players[0].score += score1
-        self.players[1].score += score2
-
-        if score1 > score2:
-            self.players[0].rank = 1
-            self.players[1].rank = 2
-        else:
-            self.players[0].rank = 2
-            self.players[1].rank = 1
+        ranked = sorted(self.players)
+        for rank, player in ranked:
+            player.rank = rank + 1
 
     def __del__(self):
         msg = {
