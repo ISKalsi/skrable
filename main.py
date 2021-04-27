@@ -24,7 +24,6 @@ drawBoard = DrawBoard(
 ui = UI()
 game = Game(menu.playerName, menu.gameCode, menu.isHost, drawBoard)
 player = Player(game.playerName)
-opponent = Player(game.opponentName)
 
 
 def isQuit(event):
@@ -49,7 +48,13 @@ def waitForPlayerLoop():
         isQuit(event)
         ui.manager.process_events(event)
 
-    if game.opponentName:
+        if event.type == pygame.USEREVENT:
+            if event.user_type == gui.UI_BUTTON_PRESSED:
+                if event.ui_object_id == "penPanel.startButton":
+                    game.startGame()
+                    ui.panelPen.start.hide()
+
+    if game.isStarted:
         return False
 
     return True
@@ -84,18 +89,29 @@ def waitWordLoop():
     return True
 
 
-def drawLoop():
+def updatePendingGuesses():
     with game.lock:
         pg = game.pendingGuesses
-        isCorrect = False
-        for guess in pg:
-            if ui.addGuessAndCheckCorrect(guess, opponent):
-                isCorrect = True
+
+        for playerID, guesses in pg:
+            for guess in guesses:
+                if ui.addGuessAndCheckCorrect(guess, game.players[playerID]):
+                    game.notGuessedCounter -= 1
             pg.pop(0)
 
-        if isCorrect:
-            return False
 
+def isRoundActive():
+    if ui.panelWord.isTimeUp():
+        with game.lock:
+            game.setRoundInactive(isTimeUp=True)
+        return False
+    if not game.isRoundActive:
+        return False
+
+    return True
+
+
+def drawLoop():
     for event in pygame.event.get():
         isQuit(event)
 
@@ -125,11 +141,9 @@ def drawLoop():
 
         ui.manager.process_events(event)
 
-    if ui.panelWord.isTimeUp():
-        game.setRoundInactive()
-        return False
+    updatePendingGuesses()
 
-    return True
+    return isRoundActive()
 
 
 def guessLoop():
@@ -151,16 +165,12 @@ def guessLoop():
                 if event.ui_object_id == "guessPanel.guessInput" and event.text:
                     guess = event.text.strip().lower()
                     game.addToPendingGuesses(guess)
-                    if ui.addGuessAndCheckCorrect(guess, player):
-                        return False
 
         ui.manager.process_events(event)
 
-    if ui.panelWord.isTimeUp():
-        game.setRoundInactive()
-        return False
+    updatePendingGuesses()
 
-    return True
+    return isRoundActive()
 
 
 def run(loop, blitDrawBoard=True):
@@ -172,34 +182,27 @@ def run(loop, blitDrawBoard=True):
 
 
 if __name__ == '__main__':
-    proceededToSetup = game.newGame(rounds=2, timePerRound=10) if game.isTurn else game.newGame()
+    proceededToSetup = game.newGame(rounds=2, timePerRound=30) if game.isTurn else game.newGame()
 
     if not proceededToSetup:
         exit()
 
     ui.panelGuess.disableGuessInput()
+    if not game.isTurn:
+        ui.panelPen.start.hide()
 
     ui.panelDrawBoard.setOneLinerText(UI.WAITING_FOR_PLAYER)
     ui.panelDrawBoard.showTextOverlay()
     run(waitForPlayerLoop, blitDrawBoard=False)
     ui.panelDrawBoard.hideTextOverlay()
 
-    opponent.name = game.opponentName
-
-    if not game.isTurn:
-        ui.panelPlayer.addPlayer(opponent)
+    for player in game.players:
         ui.panelPlayer.addPlayer(player)
-        game.addPlayers(opponent, player)
-    else:
-        ui.panelPlayer.addPlayer(player)
-        ui.panelPlayer.addPlayer(opponent)
-        game.addPlayers(player, opponent)
 
     ui.panelPlayer.showRoundLabel()
     ui.panelDrawBoard.setOneLinerText(UI.CHOOSING_WORD)
 
-    for _ in range(game.rounds * 2):
-        game.setRoundActive()
+    for _ in range(game.rounds * len(game.players)):
         ui.panelGuess.disableGuessInput()
 
         if game.isTurn:
@@ -236,7 +239,6 @@ if __name__ == '__main__':
         game.calculateScore(*[int(time) for time in ui.panelWord.currentTime.split(':')])
         ui.endRound()
 
-        while game.isRoundActive:
-            pass
+        game.nextRound()
 
     print("Game finished. Thanks for playing!")

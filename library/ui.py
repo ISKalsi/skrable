@@ -323,6 +323,16 @@ class PenPanel:
             }
         )
 
+        rect = Rect((0, 0), UI.SIZE_BTN)
+        rect.center = [i / 2 for i in self.panel.rect.size]
+        self.start = guiElements.UIButton(
+            object_id="startButton",
+            relative_rect=rect,
+            text="Start",
+            manager=uiManager,
+            container=self.panel
+        )
+
 
 class DrawBoardPanel:
     def __init__(self, uiManager):
@@ -629,6 +639,7 @@ class UI:
 
         if guess == word:
             self.panelGuess.addGuess(player)
+            player.hasGuessed = True
             return True
         else:
             self.panelGuess.addGuess(player, guess)

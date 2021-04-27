@@ -12,6 +12,7 @@ class Network:
     interval = 0.1
 
     SUCCESS = 200
+    START = 300
     FAIL = 400
     EXIT = 600
     DISCONNECT = 800
@@ -206,7 +207,7 @@ class Server(Network):
 
 class Client(Thread, Network):
     def __init__(self):
-        Thread.__init__(self, daemon=True)
+        Thread.__init__(self, daemon=True, name="ClientThread")
         Network.__init__(self)
 
         self.__sendMsg = None
