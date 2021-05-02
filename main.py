@@ -1,7 +1,7 @@
 import pygame
 import pygame_gui as gui
 from library.contants import Values, Colors
-from library.elements import DrawBoard, Game, Player
+from library.elements import DrawBoard, Game
 from library.ui import StartGame, UI
 
 menu = StartGame()
@@ -23,7 +23,6 @@ drawBoard = DrawBoard(
 
 ui = UI()
 game = Game(menu.playerName, menu.gameCode, menu.isHost, drawBoard)
-player = Player(game.playerName)
 
 
 def isQuit(event):
@@ -94,14 +93,14 @@ def updatePendingGuesses():
         pg = game.pendingGuesses
 
         for playerID, guesses in pg:
-            for guess in guesses:
-                if ui.addGuessAndCheckCorrect(guess, game.players[playerID]):
+            for timeLeft, guess in guesses:
+                if ui.addGuessAndCheckCorrect(timeLeft, guess, game.players[playerID]):
                     game.notGuessedCounter -= 1
             pg.pop(0)
 
 
 def isRoundActive():
-    if ui.panelWord.isTimeUp():
+    if not ui.panelWord.timeLeft():
         with game.lock:
             game.setRoundInactive(isTimeUp=True)
         return False
@@ -164,7 +163,7 @@ def guessLoop():
             if event.user_type == gui.UI_TEXT_ENTRY_FINISHED:
                 if event.ui_object_id == "guessPanel.guessInput" and event.text:
                     guess = event.text.strip().lower()
-                    game.addToPendingGuesses(guess)
+                    game.addToPendingGuesses(ui.panelWord.timeLeft(), guess)
 
         ui.manager.process_events(event)
 
@@ -182,7 +181,7 @@ def run(loop, blitDrawBoard=True):
 
 
 if __name__ == '__main__':
-    proceededToSetup = game.newGame(rounds=2, timePerRound=30) if game.isTurn else game.newGame()
+    proceededToSetup = game.newGame(rounds=2, timePerRound=5) if game.isTurn else game.newGame()
 
     if not proceededToSetup:
         exit()
@@ -192,9 +191,9 @@ if __name__ == '__main__':
         ui.panelPen.start.hide()
 
     ui.panelDrawBoard.setOneLinerText(UI.WAITING_FOR_PLAYER)
-    ui.panelDrawBoard.showTextOverlay()
+    ui.panelDrawBoard.showOneLinerTextOverlay()
     run(waitForPlayerLoop, blitDrawBoard=False)
-    ui.panelDrawBoard.hideTextOverlay()
+    ui.panelDrawBoard.hideOneLinerTextOverlay()
 
     for player in game.players:
         ui.panelPlayer.addPlayer(player)
@@ -209,9 +208,9 @@ if __name__ == '__main__':
             while not game.wordChoices:
                 pass
 
-            ui.panelDrawBoard.showTextOverlay(game.wordChoices)
+            ui.panelDrawBoard.showOneLinerTextOverlay(game.wordChoices)
             run(chooseWordLoop, blitDrawBoard=False)
-            ui.panelDrawBoard.hideTextOverlay()
+            ui.panelDrawBoard.hideOneLinerTextOverlay()
 
             ui.panelWord.setWord(game.word, isHost=True)
             ui.panelWord.startTimer(game.roundTime)
@@ -221,9 +220,9 @@ if __name__ == '__main__':
 
             run(drawLoop)
         else:
-            ui.panelDrawBoard.showTextOverlay()
+            ui.panelDrawBoard.showOneLinerTextOverlay()
             run(waitWordLoop, blitDrawBoard=False)
-            ui.panelDrawBoard.hideTextOverlay()
+            ui.panelDrawBoard.hideOneLinerTextOverlay()
 
             ui.panelGuess.enableGuessInput()
 
@@ -236,9 +235,10 @@ if __name__ == '__main__':
             run(guessLoop)
 
         drawBoard.clearBoard()
-        game.calculateScore(*[int(time) for time in ui.panelWord.currentTime.split(':')])
+        game.calculateScore(ui.panelWord.timeLeft())
         ui.endRound()
 
         game.nextRound()
 
+    game.endGame()
     print("Game finished. Thanks for playing!")

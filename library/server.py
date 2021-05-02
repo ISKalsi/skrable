@@ -68,8 +68,9 @@ class SkrableServer(Server):
                     if not data["roundActive"]:
                         processedData = self.ABORT
             elif game["gameStarted"]:
-                if game["word"] in data["pendingGuesses"]:
-                    game["notGuessedCounter"] -= 1
+                for guess in data["pendingGuesses"]:
+                    if game["word"] in guess:
+                        game["notGuessedCounter"] -= 1
                 game["roundActive"] = game["notGuessedCounter"] != 0
                 game["roundActive"] = data["roundActive"] if game["roundActive"] else game["roundActive"]
                 game["pendingGuesses"].append((data["id"], data["pendingGuesses"])) if data["pendingGuesses"] else ...

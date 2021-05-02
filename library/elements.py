@@ -17,6 +17,7 @@ class Player:
         self.rank = 1
         self.isTurn = Player.COUNT == 0
         self.hasGuessed = False
+        self.timeLeft = 0
 
         Player.COUNT += 1
 
@@ -210,8 +211,8 @@ class Game(Client):
     def pendingGuesses(self):
         return self.guesses
 
-    def addToPendingGuesses(self, guess):
-        self.__game["pendingGuesses"].append(guess)
+    def addToPendingGuesses(self, timeLeft, guess):
+        self.__game["pendingGuesses"].append((timeLeft, guess))
 
     def addToPendingCoordinates(self, coordinate):
         if not self.__game["pendingCoordinates"]:
@@ -219,11 +220,8 @@ class Game(Client):
         self.__game["pendingCoordinates"].append(coordinate)
 
     def __turnChange(self):
-        self.players[self.drawerID].isTurn = False
-
         N = len(self.players)
         ID = self.drawerID = (self.drawerID + 1) % N
-        self.players[ID].isTurn = True
 
         self.isTurn = ID == self.playerID
 
@@ -237,8 +235,6 @@ class Game(Client):
         self.__wordChoices.clear()
         self.__game["isDrawing"] = False
         self.__game["exitCode"] = self.SUCCESS
-        for player in self.players:
-            player.hasGuessed = False
 
     def __sendUpdatedGame(self):
         self._sendMsg(self.__game)
@@ -246,13 +242,16 @@ class Game(Client):
     def __prepForNextRound(self):
         self.__turnChange()
         self.__resetRound()
+        print("Sending round end info to server...")
         self.__sendUpdatedGame()
-        print("Round finished.")
+        print("Round finished")
 
     def __isRoundActiveOnServer(self, roundActive):
         if not roundActive:
+            print("Clearing guesses list")
             while self.guesses:
                 pass
+            print("Cleared guesses list")
 
             self.setRoundInactive()
             return False
@@ -403,20 +402,30 @@ class Game(Client):
 
         return False
 
-    def calculateScore(self, minLeft, secLeft):
-        totalSecLeft = minLeft * 60 + secLeft
-        timeTaken = self.roundTime - totalSecLeft
-        playerGuessedCount = [player.hasGuessed for player in self.players].count(True)
+    def calculateScore(self, totalSecLeft):
+        playersGuessed = 0
+        for player in self.players:
+            if player.hasGuessed:
+                playersGuessed += 1
 
         for player in self.players:
             if player.hasGuessed:
-                raise NotImplementedError
+                player.score = player.timeLeft * 15 + 100
             elif player.isTurn:
-                raise NotImplementedError
+                player.isTurn = False
+                if playersGuessed:
+                    player.score += (playersGuessed * 15) + (totalSecLeft * 5) + 100
 
-        ranked = sorted(self.players)
-        for rank, player in ranked:
+        ranked = sorted(self.players, reverse=True)
+        for rank, player in enumerate(ranked):
             player.rank = rank + 1
+            player.hasGuessed = False
+            player.timeLeft = 0
+
+        self.players[self.drawerID].isTurn = True
+
+    def endGame(self):
+        self.__isRunning = False
 
     def __del__(self):
         msg = {

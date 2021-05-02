@@ -211,7 +211,8 @@ class GuessPanel:
 
 class WordPanel:
     def __init__(self, uiManager):
-        self.currentTime = "0:00"
+        self.__currentTime = "0:00"
+        self.__timeInSec = 0
 
         size = Values.SIZE_MAIN_WINDOW
         ratio = Values.RATIO_DB_TO_MW[0], (1 - Values.RATIO_DB_TO_MW[1]) * (1 - Values.RATIO_PP)
@@ -256,15 +257,17 @@ class WordPanel:
         self.__isRunning = False
 
     def __countdown(self, timeInSec):
-        while timeInSec and self.__isRunning:
-            mins, secs = divmod(timeInSec, 60)
+        self.__timeInSec = timeInSec
+        while self.__timeInSec and self.__isRunning:
+            mins, secs = divmod(self.__timeInSec, 60)
             timer = '{:1d}:{:02d}'.format(mins, secs)
-            self.currentTime = timer
+            self.__currentTime = timer
             time.sleep(1)
-            timeInSec -= 1
+            self.__timeInSec -= 1
 
         self.timer.hide()
-        self.currentTime = "0:00"
+        self.__timeInSec = 0
+        self.__currentTime = "0:00"
 
     def setWord(self, word, isHost):
         self.__word = word.lower().strip()
@@ -277,11 +280,11 @@ class WordPanel:
     def getWord(self):
         return self.__word
 
-    def isTimeUp(self):
-        return self.currentTime == "0:00"
+    def timeLeft(self):
+        return self.__timeInSec
 
     def updateTimer(self):
-        self.timer.set_text(self.currentTime)
+        self.timer.set_text(self.__currentTime)
 
     def startTimer(self, t):
         self.__isRunning = True
@@ -446,7 +449,7 @@ class DrawBoardPanel:
     def setOneLinerText(self, text):
         self.textOneLiner.set_text(text)
 
-    def showTextOverlay(self, words=None):
+    def showOneLinerTextOverlay(self, words=None):
         self.textOverlay.show()
 
         if words:
@@ -456,7 +459,7 @@ class DrawBoardPanel:
         else:
             self.__toggleVisibility(isDrawing=False)
 
-    def hideTextOverlay(self):
+    def hideOneLinerTextOverlay(self):
         self.textOverlay.hide()
 
 
@@ -634,12 +637,13 @@ class UI:
         self.panelPen = PenPanel(self.manager)
         self.panelWord = WordPanel(self.manager)
 
-    def addGuessAndCheckCorrect(self, guess, player):
+    def addGuessAndCheckCorrect(self, timeLeft, guess, player):
         word = self.panelWord.getWord()
 
         if guess == word:
             self.panelGuess.addGuess(player)
             player.hasGuessed = True
+            player.timeLeft = timeLeft
             return True
         else:
             self.panelGuess.addGuess(player, guess)
