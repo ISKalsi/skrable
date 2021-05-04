@@ -1,6 +1,7 @@
 import pygame
 import time
 import threading
+from math import inf
 from library.network import Client
 from library.contants import Colors, Values
 from threading import Thread
@@ -13,13 +14,25 @@ class Player:
     def __init__(self, name):
         self.ID = Player.COUNT
         self.name = name
-        self.score = 0
+        self.__score = 0
+        self.deltaScore = 0
         self.rank = 1
         self.isTurn = Player.COUNT == 0
         self.hasGuessed = False
         self.timeLeft = 0
 
         Player.COUNT += 1
+        if Player.COUNT == 3:
+            pass
+
+    @property
+    def score(self):
+        return self.__score
+
+    @score.setter
+    def score(self, value):
+        self.deltaScore = value - self.__score
+        self.__score = value
 
     def __lt__(self, other):
         return self.score < other.score
@@ -402,15 +415,17 @@ class Game(Client):
 
         return False
 
-    def calculateScore(self, totalSecLeft):
+    def calculateScore(self):
         playersGuessed = 0
         for player in self.players:
             if player.hasGuessed:
                 playersGuessed += 1
 
+        totalSecLeft = min(self.players, key=lambda x: x.timeLeft if not x.isTurn else inf).timeLeft
+
         for player in self.players:
             if player.hasGuessed:
-                player.score = player.timeLeft * 15 + 100
+                player.score += player.timeLeft * 15 + 100
             elif player.isTurn:
                 player.isTurn = False
                 if playersGuessed:

@@ -292,6 +292,7 @@ class WordPanel:
         Thread(name="Timer", target=self.__countdown, args=(t,), daemon=True).start()
 
     def stopTimer(self):
+        self.timer.hide()
         self.__isRunning = False
 
     def clearWord(self):
@@ -339,6 +340,8 @@ class PenPanel:
 
 class DrawBoardPanel:
     def __init__(self, uiManager):
+        self.scoreboardCountdownTimer = 0
+
         size = UI.SIZE_MW
         ratio = Values.RATIO_DB_TO_MW
 
@@ -371,14 +374,6 @@ class DrawBoardPanel:
             visible=False
         )
 
-        sb = self.scoreBoardOverlay = guiElements.UIPanel(
-            object_id=OID("scoreBoardOverlay", "panelOverlay"),
-            relative_rect=Rect((x + UI.PADDING, y + UI.PADDING), UI.SIZE_DB),
-            manager=uiManager,
-            starting_layer_height=3,
-            visible=False
-        )
-
         self.textOneLiner = guiElements.UILabel(
             object_id="overlay",
             text=UI.CHOOSING_WORD,
@@ -387,33 +382,24 @@ class DrawBoardPanel:
             container=self.textOverlay,
         )
 
-        rect = Rect(0, 0, sb.panel_container.rect.w, sb.panel_container.rect.h * 0.6)
+        sb = self.scoreBoardOverlay = guiElements.UIPanel(
+            object_id=OID("scoreBoardOverlay", "panelOverlay"),
+            relative_rect=Rect((x + UI.PADDING, y + UI.PADDING), UI.SIZE_DB),
+            manager=uiManager,
+            starting_layer_height=3,
+            visible=False
+        )
+
+        rect = Rect(0, 0, sb.panel_container.rect.w, sb.panel_container.rect.h * 0.35)
         self.textTheWordWas = guiElements.UILabel(
             object_id=OID("theWordWas", "scoreboard"),
-            text="The word was: ",
+            text="The word was kitten",
             relative_rect=rect,
             manager=uiManager,
             container=self.scoreBoardOverlay
         )
 
-        rect.y += 10
-        self.hostScore = guiElements.UILabel(
-            object_id=OID("hostScore", "scoreboard"),
-            text="",
-            relative_rect=rect,
-            manager=uiManager,
-            container=self.scoreBoardOverlay
-        )
-
-        rect.y += 10
-        self.joinScore = guiElements.UILabel(
-            object_id=OID("joinScore", "scoreboard"),
-            text="",
-            relative_rect=rect,
-            manager=uiManager,
-            container=self.scoreBoardOverlay
-        )
-
+        self.scoreLabels = []
         self.words = []
 
         wordsN = 3
@@ -435,6 +421,42 @@ class DrawBoardPanel:
                 visible=False
             )
             self.words.append(btn)
+
+    def generatePlayerScoreLabels(self, player, position):
+        rect = Rect(0, 0, 500, 500)
+        rect.topright = (self.panel.rect.w // 2, self.textTheWordWas.rect.bottom + 10 + 50 * position)
+
+        nameLabel = guiElements.UILabel(
+            object_id=OID(f"name{position}", "scoreboardName"),
+            text=player.name + ": ",
+            relative_rect=rect,
+            manager=self.panel.ui_manager,
+            container=self.scoreBoardOverlay
+        )
+
+        fitRectToLabel(nameLabel)
+
+        rect.topleft = rect.topright
+        scoreLabel = guiElements.UILabel(
+            object_id=OID(f"deltaScore{position}", "scoreboardDeltaScore"),
+            text="",
+            relative_rect=rect,
+            manager=self.panel.ui_manager,
+            container=self.scoreBoardOverlay
+        )
+
+        self.scoreLabels.append((player, nameLabel, scoreLabel))
+
+    def updateScoreLabels(self):
+        sortedScoreLabels = sorted(self.scoreLabels, key=lambda x: x[0].deltaScore, reverse=True)
+        for i, (player, nameLabel, scoreLabel) in enumerate(sortedScoreLabels):
+            scoreLabel.text = f"{player.deltaScore}"
+            scoreLabel.text_colour = "#00FF00" if player.deltaScore else "#FF0000"
+            fitRectToLabel(scoreLabel)
+
+            y = self.textTheWordWas.relative_rect.centery + 10 + 30 * (i+1)
+            scoreLabel.set_relative_position((scoreLabel.relative_rect.x, y))
+            nameLabel.set_relative_position((scoreLabel.relative_rect.x - nameLabel.rect.w, y))
 
     def __toggleVisibility(self, isDrawing):
         if isDrawing:
@@ -461,6 +483,24 @@ class DrawBoardPanel:
 
     def hideOneLinerTextOverlay(self):
         self.textOverlay.hide()
+
+    def __countdown(self, timeInSec):
+        self.scoreboardCountdownTimer = timeInSec
+        while self.scoreboardCountdownTimer:
+            time.sleep(1)
+            self.scoreboardCountdownTimer -= 1
+
+    def showScoreboard(self):
+        self.updateScoreLabels()
+        self.scoreBoardOverlay.show()
+        Thread(target=self.__countdown, args=(3,), daemon=True).start()
+
+    def hideScoreboard(self):
+        if not self.scoreboardCountdownTimer:
+            self.scoreBoardOverlay.hide()
+            return True
+
+        return False
 
 
 class PlayerPanel:
@@ -540,7 +580,7 @@ class PlayerPanel:
 
         rect = Rect((0, cardY), (cardW, cardH))
         panel = guiElements.UIPanel(
-            object_id=OID(f"player{num}", "player"),
+            object_id=OID(f"player{num}", "playerPanel"),
             relative_rect=rect,
             manager=self.panel.ui_manager,
             container=self.panel,
@@ -549,7 +589,7 @@ class PlayerPanel:
 
         rect = Rect(0, 0, rankW, panel.panel_container.rect.h)
         rankLabel = guiElements.UILabel(
-            object_id=OID(f"rank{num}", "rank"),
+            object_id=OID(f"rank{num}", "playerRank"),
             text=f"#{player.rank}",
             relative_rect=rect,
             manager=self.panel.ui_manager,
@@ -567,7 +607,7 @@ class PlayerPanel:
 
         rect = Rect(rankW, 0, nameW, nameH)
         nameLabel = guiElements.UILabel(
-            object_id=OID(f"name{num}", "name"),
+            object_id=OID(f"name{num}", "playerName"),
             text=player.name.strip(),
             relative_rect=rect,
             manager=self.panel.ui_manager,
@@ -582,7 +622,7 @@ class PlayerPanel:
 
         rect.bottomleft = (rankW, panel.panel_container.rect.h + 6)
         scoreLabel = guiElements.UILabel(
-            object_id=OID(f"score{num}", "score"),
+            object_id=OID(f"score{num}", "playerScore"),
             text=f"score: {player.score}",
             relative_rect=rect,
             manager=self.panel.ui_manager,
@@ -650,7 +690,8 @@ class UI:
             return False
 
     def endRound(self):
+        self.panelWord.stopTimer()
         self.panelPlayer.updatePlayers()
         self.panelPlayer.updateRound()
-        self.panelWord.stopTimer()
         self.panelWord.clearWord()
+        self.panelDrawBoard.showScoreboard()

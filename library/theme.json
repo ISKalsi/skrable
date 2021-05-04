@@ -35,14 +35,14 @@
       "dark_bg": "#00000000"
     }
   },
-  "rank": {
+  "playerRank": {
     "prototype": "#playerLabel",
     "font": {
       "name": "roboto-black",
       "size": "30"
     }
   },
-  "name": {
+  "playerName": {
     "prototype": "#playerLabel",
     "font": {
       "name": "roboto-medium",
@@ -50,7 +50,7 @@
       "regular_path": "library/Roboto-Medium.ttf"
     }
   },
-  "score": {
+  "playerScore": {
     "prototype": "#playerLabel",
     "font": {
       "name": "roboto-light",
@@ -78,6 +78,20 @@
     },
     "colours":{
       "dark_bg": "#33445500"
+    }
+  },
+  "scoreboardName": {
+    "prototype": "scoreboard",
+    "font": {
+      "name": "roboto-light",
+      "size": "27"
+    }
+  },
+  "scoreboardDeltaScore": {
+    "prototype": "scoreboard",
+    "font": {
+      "name": "roboto-light",
+      "size": "27"
     }
   }
 }

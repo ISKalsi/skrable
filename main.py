@@ -149,7 +149,7 @@ def guessLoop():
     with game.lock:
         pc = game.pendingCoordinates
         if len(pc) > 1:
-            for i in range(len(pc)-1):
+            for _ in range(len(pc)-1):
                 drawBoard.draw(pc[0], pc[1])
                 pc.pop(0)
 
@@ -172,6 +172,17 @@ def guessLoop():
     return isRoundActive()
 
 
+def scoreboardLoop():
+    for event in pygame.event.get():
+        isQuit(event)
+        ui.manager.process_events(event)
+
+    if ui.panelDrawBoard.hideScoreboard():
+        return False
+
+    return True
+
+
 def run(loop, blitDrawBoard=True):
     flag = True
     while flag:
@@ -181,7 +192,7 @@ def run(loop, blitDrawBoard=True):
 
 
 if __name__ == '__main__':
-    proceededToSetup = game.newGame(rounds=2, timePerRound=5) if game.isTurn else game.newGame()
+    proceededToSetup = game.newGame(rounds=2, timePerRound=50) if game.isTurn else game.newGame()
 
     if not proceededToSetup:
         exit()
@@ -195,8 +206,9 @@ if __name__ == '__main__':
     run(waitForPlayerLoop, blitDrawBoard=False)
     ui.panelDrawBoard.hideOneLinerTextOverlay()
 
-    for player in game.players:
+    for i, player in enumerate(game.players):
         ui.panelPlayer.addPlayer(player)
+        ui.panelDrawBoard.generatePlayerScoreLabels(player, i+1)
 
     ui.panelPlayer.showRoundLabel()
     ui.panelDrawBoard.setOneLinerText(UI.CHOOSING_WORD)
@@ -235,8 +247,10 @@ if __name__ == '__main__':
             run(guessLoop)
 
         drawBoard.clearBoard()
-        game.calculateScore(ui.panelWord.timeLeft())
+        game.calculateScore()
         ui.endRound()
+
+        run(scoreboardLoop, blitDrawBoard=False)
 
         game.nextRound()
 
